@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tood — a calmer home for your to-dos</title>
+<meta name="description" content="Tood is a native Mac app: sticky notes that live right on your desktop. Download for free.">
+<link rel="icon" href="assets/icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="scene" id="scene">
+  <div class="scene-bg"></div>
+  <div class="menubar">
+    <div class="left">
+      <span class="app-name">Tood</span>
+      <span class="dim">File</span>
+      <span class="dim">Edit</span>
+      <span class="dim">View</span>
+      <span class="dim">Window</span>
+    </div>
+    <div class="right"><span id="clock">Fri 8:41 PM</span></div>
+  </div>
+
+  <div class="topbar">
+    <span></span>
+    <a class="top-download" href="https://github.com/reneezhang99/to-do-app/releases/download/v1.0.0/Tood.dmg" id="topDownload">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m6 11 6 6 6-6"/><path d="M5 21h14"/></svg>
+      Download for Mac
+    </a>
+  </div>
+
+  <div class="cards-row">
+    <div class="headline-card card-shared" id="headlineCard">
+      <div>Things</div><div>To</div><div>Do</div><div>Today</div>
+    </div>
+    <div class="sticky card-shared" id="sticky">
+      <div class="sticky-head">
+        <div class="sticky-title">To Do</div>
+        <div class="sticky-date" id="sdate"></div>
+      </div>
+      <div id="stickyRows"></div>
+    </div>
+  </div>
+
+  <div class="credit">Made with care by <a href="https://github.com/reneezhang99" target="_blank" rel="noopener">Renee</a> — Sydney &amp; California</div>
+  <div class="requirements">macOS 14+ · Apple Silicon &amp; Intel<br>First open: right-click → Open (not notarized yet)</div>
+
+  <div class="dock-wrap">
+    <ul class="dock" id="dock">
+      <li class="dock-item plain">
+        <img src="assets/dock/finder.png" alt="Finder">
+        <span class="dock-tooltip">Finder</span>
+      </li>
+      <li class="dock-item plain">
+        <img src="assets/dock/notes.png" alt="Notes">
+        <span class="dock-tooltip">Notes</span>
+      </li>
+      <li class="dock-item plain">
+        <img src="assets/dock/slack.png" alt="Slack">
+        <span class="dock-tooltip">Slack</span>
+      </li>
+      <li class="dock-item plain">
+        <img src="assets/dock/claude.png" alt="Claude">
+        <span class="dock-tooltip">Claude</span>
+      </li>
+      <li class="dock-item plain">
+        <img src="assets/dock/safari.png" alt="Safari">
+        <span class="dock-tooltip">Safari</span>
+      </li>
+      <li class="dock-item tood">
+        <img src="assets/icon.png" alt="Tood">
+        <span class="dock-tooltip">Tood</span>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
