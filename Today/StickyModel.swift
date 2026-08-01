@@ -1,0 +1,133 @@
+import Foundation
+import Observation
+
+/// Plain `Codable` snapshot written to disk. Kept separate from the runtime
+/// `@Observable` model because the Observation macro doesn't encode cleanly.
+struct StickyData: Codable, Identifiable {
+    var id: UUID
+    var title: String
+    var day: Date
+    var items: [TodoItem]
+    var colorID: StickyColor
+    var fontID: StickyFont
+    var frame: CGRect
+    var isVisible: Bool
+}
+
+/// Runtime model for a single sticky. SwiftUI observes it directly.
+@MainActor
+@Observable
+final class StickyModel: Identifiable {
+    let id: UUID
+    var title: String
+    var day: Date
+    var items: [TodoItem]
+    var colorID: StickyColor
+    var fontID: StickyFont
+    var frame: CGRect
+    var isVisible: Bool
+
+    /// Called on any change that should be persisted (routed to the manager).
+    @ObservationIgnored var onChange: (() -> Void)?
+
+    /// Mirrors the SwiftUI `@FocusState` so AppKit-level key handling (which
+    /// can't see FocusState) knows which row is focused. Not persisted.
+    @ObservationIgnored var focusedItemID: UUID?
+
+    /// Set by the view; invoked by the window's key monitor when backspace is
+    /// pressed on an empty/whitespace-only row (SwiftUI's TextField swallows
+    /// .delete key presses before onKeyPress ever sees them, even when the
+    /// field is empty, so this has to be driven from outside the TextField).
+    @ObservationIgnored var onBackspaceEmptyRow: ((UUID) -> Void)?
+
+    /// Set by the view; invoked by `StickyController.focusForTyping()` (the
+    /// global "show active sticky" shortcut) to move keyboard focus onto the
+    /// first thing worth typing into — SwiftUI's `@FocusState` isn't visible
+    /// from the AppKit-level controller, so this is the same bridge pattern.
+    @ObservationIgnored var onRequestFocus: (() -> Void)?
+
+    init(data: StickyData) {
+        self.id = data.id
+        self.title = data.title
+        self.day = data.day
+        self.items = data.items
+        self.colorID = data.colorID
+        self.fontID = data.fontID
+        self.frame = data.frame
+        self.isVisible = data.isVisible
+    }
+
+    var color: StickyColor { colorID }
+    var font: StickyFont { fontID }
+
+    func snapshot() -> StickyData {
+        StickyData(id: id, title: title, day: day, items: items,
+                   colorID: colorID, fontID: fontID, frame: frame, isVisible: isVisible)
+    }
+
+    // MARK: - Ordering
+    // Active items first (in insertion order), completed sink to the bottom
+    // in completion order. There is no manual reordering (like Apple Notes).
+    var orderedItems: [TodoItem] {
+        let active = items.filter { !$0.isDone }
+        let done = items.filter { $0.isDone }
+            .sorted { ($0.completedAt ?? .distantPast) < ($1.completedAt ?? .distantPast) }
+        return active + done
+    }
+
+    // MARK: - Mutations (each notifies the manager to persist)
+
+    @discardableResult
+    func addItem(after item: TodoItem? = nil) -> UUID {
+        let new = TodoItem()
+        if let item, let idx = items.firstIndex(where: { $0.id == item.id }) {
+            items.insert(new, at: idx + 1)
+        } else {
+            items.append(new)
+        }
+        onChange?()
+        return new.id
+    }
+
+    func setText(_ id: UUID, _ text: String) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].text = text
+        onChange?()
+    }
+
+    func toggle(_ id: UUID) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].isDone.toggle()
+        items[idx].completedAt = items[idx].isDone ? Date() : nil
+        onChange?()
+    }
+
+    func delete(_ id: UUID) {
+        items.removeAll { $0.id == id }
+        onChange?()
+    }
+
+    func setColor(_ c: StickyColor) { colorID = c; onChange?() }
+    func setFont(_ f: StickyFont) { fontID = f; onChange?() }
+    func setTitle(_ t: String) { title = t; onChange?() }
+
+    // MARK: - Factory
+
+    static func makeNew(
+        at origin: CGPoint,
+        color: StickyColor = .nextNewStickyColor(),
+        font: StickyFont = .defaultFont
+    ) -> StickyModel {
+        let data = StickyData(
+            id: UUID(),
+            title: "To Do",
+            day: Date(),
+            items: [TodoItem()], // start with one empty line, ready to type
+            colorID: color,
+            fontID: font,
+            frame: CGRect(x: origin.x, y: origin.y, width: 378, height: 490),
+            isVisible: true
+        )
+        return StickyModel(data: data)
+    }
+}

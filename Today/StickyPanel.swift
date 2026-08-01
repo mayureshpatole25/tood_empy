@@ -1,0 +1,96 @@
+import AppKit
+
+/// A borderless, rounded sticky window. It sits at the normal window level so
+/// clicking another app covers it (not always-on-top), but it's available on
+/// every Space. Resizing from any edge/corner is handled here so it's smooth
+/// and never jumps. No shadow — the sticky is flat, edge-to-edge paper.
+final class StickyPanel: NSWindow {
+
+    /// Required for a borderless window to accept text input.
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    private let edge: CGFloat = 8
+    private let resizeMin = NSSize(width: 220, height: 300)
+
+    init(frame: NSRect) {
+        super.init(
+            contentRect: frame,
+            styleMask: [.borderless, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        level = .normal
+        // .canJoinAllSpaces alone was still showing up over another app's
+        // full-screen Space (e.g. full-screen YouTube) — .fullScreenNone
+        // explicitly opts the window out of full-screen Spaces entirely.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
+
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+
+        isMovableByWindowBackground = true
+        hidesOnDeactivate = false
+        isReleasedWhenClosed = false
+    }
+
+    // MARK: - Edge / corner resize
+
+    private struct Zone: OptionSet {
+        let rawValue: Int
+        static let left = Zone(rawValue: 1)
+        static let right = Zone(rawValue: 2)
+        static let bottom = Zone(rawValue: 4)
+        static let top = Zone(rawValue: 8)
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown, let zone = resizeZone(at: event.locationInWindow) {
+            performResize(zone: zone)
+            return // consume — don't let it start a background drag or hit a control
+        }
+        super.sendEvent(event)
+    }
+
+    private func resizeZone(at p: NSPoint) -> Zone? {
+        guard let cv = contentView else { return nil }
+        let b = cv.bounds
+        var z: Zone = []
+        if p.x <= edge { z.insert(.left) }
+        if p.x >= b.width - edge { z.insert(.right) }
+        if p.y <= edge { z.insert(.bottom) }       // window coords: y=0 at bottom
+        if p.y >= b.height - edge { z.insert(.top) }
+        return z.isEmpty ? nil : z
+    }
+
+    private func performResize(zone: Zone) {
+        let startFrame = frame
+        let startMouse = NSEvent.mouseLocation
+        while let e = nextEvent(matching: [.leftMouseUp, .leftMouseDragged]) {
+            if e.type == .leftMouseUp { break }
+            let cur = NSEvent.mouseLocation
+            let dx = cur.x - startMouse.x
+            let dy = cur.y - startMouse.y
+            var f = startFrame
+
+            if zone.contains(.right) {
+                f.size.width = max(resizeMin.width, startFrame.width + dx)
+            }
+            if zone.contains(.left) {
+                let newW = max(resizeMin.width, startFrame.width - dx)
+                f.origin.x = startFrame.maxX - newW
+                f.size.width = newW
+            }
+            if zone.contains(.top) {
+                f.size.height = max(resizeMin.height, startFrame.height + dy)
+            }
+            if zone.contains(.bottom) {
+                let newH = max(resizeMin.height, startFrame.height - dy)
+                f.origin.y = startFrame.maxY - newH
+                f.size.height = newH
+            }
+            setFrame(f, display: true)
+        }
+    }
+}
