@@ -21,7 +21,7 @@ struct IntroFallView: View {
     @State private var showCTA = false
 
     private let desk = Color(hex: 0xFBF8F1)
-    private let cardColor = StickyColor.orange
+    private let cardColor = StickyColor.green
 
     var body: some View {
         ZStack {
@@ -43,29 +43,30 @@ struct IntroFallView: View {
         }
     }
 
-    /// The real sticky's own look, not a separate app-card style: same
-    /// orange paper, same big "To Do" title in black ink, same minimal
-    /// corner radius — just with one intro paragraph where the checklist
-    /// would be, so this reads as one of the pile having landed face-up
-    /// with the welcome message on it.
+    /// The real sticky's own look — emerald paper, minimal corner radius —
+    /// just with white type (rather than the usual black ink).
     private var welcomeStickyCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("To Do")
-                .font(.custom("HelveticaNeue-Medium", size: 46))
-                .foregroundStyle(cardColor.titleInk)
-            Text("Welcome! Today is a calmer home for your to-dos — sticky notes that live right on your desktop, always in view.")
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Welcome to Tood.")
+                .font(.custom("HelveticaNeue-Medium", size: 34))
+                .foregroundStyle(.white)
+            Text("A place for simple, no-fuss to-dos. Create little sticky notes that live on your desktop.")
                 .font(StickyFont.menlo.body(15))
-                .foregroundStyle(cardColor.ink.opacity(0.8))
+                .foregroundStyle(.white.opacity(0.85))
                 .lineSpacing(3)
 
             Spacer(minLength: 0)
+
+            Text("Made with care in Sydney and California.")
+                .font(StickyFont.menlo.body(12))
+                .foregroundStyle(.white.opacity(0.55))
 
             HStack {
                 Spacer()
                 Button(action: onContinue) {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 20, weight: .regular))
-                        .foregroundStyle(cardColor.ink)
+                        .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
             }

@@ -17,6 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Menu-bar-only agent: no Dock icon, no app menu bar takeover.
         NSApp.setActivationPolicy(.accessory)
 
+        // The whole design (cream paper, dark ink text) is deliberately
+        // light-only — there's no dark palette for it. Without this, macOS
+        // Dark Mode flips every semantic/system color (.primary, .secondary,
+        // system backgrounds, etc.) to their dark-mode values while the
+        // hardcoded cream/paper backgrounds stay put, producing white text
+        // on a light background. Forcing light appearance for the whole app
+        // keeps it looking the same regardless of the system setting.
+        NSApp.appearance = NSAppearance(named: .aqua)
+
         registerBundledFonts()
         manager = StickyManager()
         journal = JournalStore()
@@ -31,13 +40,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         GlobalHotKeyManager.shared.reregister()
 
         if !AppSettings.shared.onboardingCompleted {
+            // Don't let real floating stickies (a true first run's
+            // auto-created one, or any left over from previous use while
+            // testing) appear behind/around the onboarding windows — the
+            // "Sticky" step reveals its one sticky deliberately, and
+            // `onFinish` below reveals the rest once onboarding is done.
+            manager.hideAll()
             showIntro()
+        } else {
+            // A normal launch (double-click in Finder, Spotlight, etc.) —
+            // without this, an .accessory app with no Dock icon has no
+            // window to show, so it'd silently do nothing visible at all.
+            showHome()
         }
     }
 
-    // Re-launching the app (e.g. from Finder) reveals the notes again.
+    // Re-launching the app while it's already running (e.g. opening it
+    // again from Finder/Spotlight) brings Home back along with the notes.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         manager.showAll()
+        showHome()
         return true
     }
 
@@ -96,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             content: OnboardingView(manager: manager, settings: AppSettings.shared, onFinish: { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
+                self?.manager.showAll()
             }, onExitToIntro: { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil

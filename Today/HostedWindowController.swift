@@ -34,14 +34,16 @@ final class HostedWindowController<Content: View>: NSWindowController {
         if hidesTitleBar {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
-            window.standardWindowButton(.closeButton)?.isHidden = true
-            window.standardWindowButton(.miniaturizeButton)?.isHidden = true
-            window.standardWindowButton(.zoomButton)?.isHidden = true
             window.isMovableByWindowBackground = true // no title-bar strip left to drag from
+            // Traffic lights stay visible (just floating over the content,
+            // no bar behind them — the standard pattern for chrome-free
+            // windows) so there's always an obvious, discoverable way to
+            // close the window, not just ⌘W.
 
-            // No visible close button anymore — this app has no main menu
-            // bar (it's .accessory) to route ⌘W automatically, so it needs
-            // handling here, same reasoning as the stickies' own ⌘N/⌘D.
+            // This app has no main menu bar (it's .accessory) to route ⌘W
+            // automatically, so it's handled here too, same reasoning as
+            // the stickies' own ⌘N/⌘D — belt and suspenders with the
+            // now-visible close button.
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self, event.window === self.window,
                       event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "w"

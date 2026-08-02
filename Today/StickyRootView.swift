@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The visible sticky: flat, edge-to-edge paper with a big two-line "To Do"
@@ -82,26 +83,72 @@ struct StickyRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 8) {
-            // Editable title — wraps naturally up to 2 lines at 90% line
-            // height, Regular weight (Medium read too bold), instead of the
-            // old fixed "To Do" split one-word-per-line.
-            TextField("To Do", text: titleBinding, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.custom("HelveticaNeue", size: 60))
-                .tracking(-3.6) // -6% of the 60pt size
-                .foregroundStyle(color.titleInk)
-                .lineLimit(1...2)
-                .lineSpacing(-6) // ~90% line height at this size
-                .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
-                .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                .frame(height: 108, alignment: .top) // 54 * 2 — same footprint as the old fixed two-line block
-            Spacer(minLength: 8)
-            Text(Self.dateFormatter.string(from: model.day))
-                .font(bodyFont(14))
-                .foregroundStyle(color.ink.opacity(0.3))
-                .padding(.top, 6)
+        // Measures the header's *total* width and gives the title an
+        // explicit, fixed budget (total minus a reserved slot for the date)
+        // rather than letting the TextField report its own "ideal" width —
+        // an unconstrained TextField's ideal width just grows with its
+        // content, so measuring that was circular and never actually
+        // constrained anything (titles kept wrapping mid-word regardless).
+        GeometryReader { proxy in
+            let dateReserve: CGFloat = 113 // ~100pt for "MMM dd, yyyy" in any of the 4 fonts, + 13pt gap
+            let titleWidth = max(proxy.size.width - dateReserve, 80)
+            let titleSize = Self.titleFontSize(
+                for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
+            )
+
+            HStack(alignment: .top, spacing: 8) {
+                // Editable title — wraps naturally up to 2 lines, Regular
+                // weight (Medium read too bold). Steps down in size as the
+                // title gets longer (see `titleFontSize`) so a single word
+                // that can't wrap (no space to break on) shrinks instead of
+                // getting cut mid-word ("Admin" → "Admi"/"n").
+                TextField("To Do", text: titleBinding, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.custom("HelveticaNeue", size: titleSize))
+                    .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
+                    .foregroundStyle(color.titleInk)
+                    .lineLimit(1...2)
+                    .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
+                    .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                    .padding(.trailing, 6) // headroom for negative tracking on the last glyph
+                    .frame(width: titleWidth, height: 108, alignment: .topLeading)
+                Spacer(minLength: 0)
+                Text(Self.dateFormatter.string(from: model.day))
+                    .font(bodyFont(14))
+                    .foregroundStyle(color.ink.opacity(0.3))
+                    .padding(.top, 6)
+            }
         }
+        .frame(height: 108) // fixes this GeometryReader's own height so it doesn't disrupt the sticky's natural content-height sizing
+    }
+
+    /// Shrinks the title (starting from `baseSize`, the user's chosen
+    /// ceiling in Settings) until its widest *unbroken word* actually fits
+    /// `availableWidth` — a character-count tier isn't right here, since a
+    /// single word that's too wide can't be fixed by wrapping (there's no
+    /// space to break on), it just gets cut mid-word. Multi-word titles
+    /// still wrap normally between words at whatever size their longest
+    /// word lands on; only an unbroken word ever forces a shrink.
+    private static func titleFontSize(for text: String, baseSize: CGFloat, availableWidth: CGFloat) -> CGFloat {
+        guard !text.isEmpty else { return baseSize }
+        let longestWord = text
+            .components(separatedBy: " ")
+            .max(by: { $0.count < $1.count }) ?? text
+
+        // A few points of slack below the measured column width — the
+        // caret, subpixel rounding, and the trailing padding above all eat
+        // into it in ways a raw string measurement doesn't capture.
+        let budget = max(availableWidth - 10, 40)
+        var size = baseSize
+        while size > 20 {
+            let font = NSFont(name: "HelveticaNeue", size: size) ?? NSFont.systemFont(ofSize: size)
+            let width = (longestWord as NSString)
+                .size(withAttributes: [.font: font, .kern: size * -0.06])
+                .width
+            if width <= budget { break }
+            size -= 2
+        }
+        return size
     }
 
     private var titleBinding: Binding<String> {

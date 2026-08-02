@@ -49,6 +49,13 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(userName, forKey: Keys.userName) }
     }
 
+    /// The ceiling a sticky's title renders at before the shrink-to-fit
+    /// logic in `StickyRootView` ever kicks in — not everyone wants the
+    /// title quite as big as the default.
+    var titleSize: StickyTitleSize {
+        didSet { UserDefaults.standard.set(titleSize.rawValue, forKey: Keys.titleSize) }
+    }
+
     private init() {
         let d = UserDefaults.standard
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
@@ -58,6 +65,7 @@ final class AppSettings {
         journalPrompt = d.string(forKey: Keys.journalPrompt) ?? "What's actually on your mind today?"
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
+        titleSize = d.string(forKey: Keys.titleSize).flatMap(StickyTitleSize.init(rawValue:)) ?? .large
     }
 
     private enum Keys {
@@ -68,5 +76,6 @@ final class AppSettings {
         static let journalPrompt = "today.journalPrompt"
         static let journalLocation = "today.journalLocationEnabled"
         static let userName = "today.userName"
+        static let titleSize = "today.titleSize"
     }
 }

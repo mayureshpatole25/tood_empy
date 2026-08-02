@@ -16,17 +16,28 @@ struct OnboardingView: View {
     @State private var color: StickyColor? = StickyColor.defaultColor
     @State private var font: StickyFont = StickyFont.defaultFont
     @State private var previewSticky: StickyModel?
+    @State private var connectingCalendar = false
     @FocusState private var itemFieldFocused: Bool
+
+    private let auth = GoogleAuthService.shared
 
     // "Welcome" no longer lives here — `IntroFallView` (the falling-stickies
     // page shown right before this) already carries that greeting, so this
     // wizard starts straight at the first real choice instead of repeating it.
-    private let steps = ["Color", "Font", "Sticky", "Shortcuts"]
+    private let steps = ["Color", "Font", "Sticky", "Shortcuts", "Calendar"]
 
     /// Same cream desk + dotted paper texture as `IntroFallView`, and the
     /// same 640×520 window size — the wizard should feel like the next page
     /// of the same moment, not a jump to a different, smaller app window.
     private let desk = Color(hex: 0xFBF8F1)
+
+    /// Orange instead of the app's usual coral accent (`AccentColor` in
+    /// Assets) — just for this wizard, since it reads as more distinct.
+    /// Applied directly (not just `.tint`, which only affects real controls
+    /// like buttons — a plain `Color.accentColor.fill()` ignores `.tint`
+    /// entirely and reads the shared asset regardless, which is why the
+    /// progress dots stayed coral even after the button went orange).
+    private let accent = StickyColor.orange.paper
 
     var body: some View {
         ZStack {
@@ -40,7 +51,8 @@ struct OnboardingView: View {
                     case 0: colorStep
                     case 1: fontStep
                     case 2: stickyStep
-                    default: shortcutStep
+                    case 3: shortcutStep
+                    default: calendarStep
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -50,6 +62,7 @@ struct OnboardingView: View {
             .padding(40)
         }
         .frame(width: 640, height: 520)
+        .tint(accent)
     }
 
     private var colorStep: some View {
@@ -93,7 +106,7 @@ struct OnboardingView: View {
                         .frame(width: 90)
                         .background(
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(font == f ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .fill(font == f ? accent.opacity(0.15) : Color.clear)
                         )
                     }
                     .buttonStyle(.plain)
@@ -178,6 +191,43 @@ struct OnboardingView: View {
         }
     }
 
+    /// Last step, and optional — skippable via "Get Started" same as any
+    /// other step. Reuses `GoogleAuthService` directly (same connect flow
+    /// as Settings), so finishing this step here or later from Settings
+    /// leaves the app in the same state either way.
+    private var calendarStep: some View {
+        VStack(spacing: 20) {
+            stepHeading("Connect your calendar", "See today's events on your Home screen, right next to your stickies.")
+            if auth.isConnected {
+                VStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.green)
+                    Text(auth.connectedEmail ?? "Connected")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Button(connectingCalendar ? "Connecting…" : "Connect Google Calendar") {
+                    connectCalendar()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(connectingCalendar)
+                Text("Optional — you can always connect later from Settings.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func connectCalendar() {
+        connectingCalendar = true
+        Task {
+            defer { connectingCalendar = false }
+            try? await auth.connect()
+        }
+    }
+
     private func stepHeading(_ title: String, _ subtitle: String) -> some View {
         VStack(spacing: 6) {
             Text(title).font(.system(size: 18, weight: .semibold))
@@ -192,7 +242,7 @@ struct OnboardingView: View {
         HStack {
             ForEach(steps.indices, id: \.self) { i in
                 Circle()
-                    .fill(i == step ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .fill(i == step ? accent : Color.secondary.opacity(0.3))
                     .frame(width: 6, height: 6)
             }
             Spacer()

@@ -43,7 +43,7 @@ struct HomeView: View {
                 bottomRow
             }
             .padding(.horizontal, 44)
-            .padding(.top, 22)
+            .padding(.top, 30)
             .padding(.bottom, 44)
         }
         .frame(minWidth: 820, minHeight: 600)
@@ -61,12 +61,7 @@ struct HomeView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(greeting)
-                    .font(.custom("HelveticaNeue-Medium", size: 40))
-                    // Both lines are already flush left in this VStack, but
-                    // Helvetica Neue Medium's glyphs carry a bit more left
-                    // side-bearing than the system font at 40pt vs 14pt —
-                    // this nudges the optical (not layout-box) edges to match.
-                    .padding(.leading, -2)
+                    .font(.system(size: 40, weight: .medium))
                 Text(dateLine)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
@@ -136,29 +131,32 @@ struct HomeView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: manager.order)
     }
 
-    /// Zero stickies — a dashed, ghost version of the real card shape (not
-    /// a generic "no items" message) with its own invitation to create one.
+    /// Zero stickies — a real sticky (same paper/title look as
+    /// `StickyDeskCard`, in whatever the default color is), not a generic
+    /// dashed placeholder, with its own invitation to create the first one.
     private var emptyStickyState: some View {
-        Button { manager.newSticky() } label: {
-            VStack(alignment: .leading, spacing: 14) {
+        let color = StickyColor.defaultColor ?? .pink
+        return Button { manager.newSticky() } label: {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("To Do")
-                    .font(.custom("HelveticaNeue", size: 16))
-                    .foregroundStyle(Color(hex: 0x20211E).opacity(0.3))
-                Spacer(minLength: 0)
-                VStack(alignment: .leading, spacing: 6) {
+                    .font(.custom("HelveticaNeue", size: 17))
+                    .foregroundStyle(color.titleInk)
+                    .lineLimit(1)
+
+                HStack(spacing: 8) {
                     Image(systemName: "plus.circle")
-                        .font(.system(size: 15))
-                    Text("Create your first sticky")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
+                        .foregroundStyle(color.ink.opacity(0.6))
+                    Text("Create your first")
+                        .font(.system(size: 12.5))
+                        .foregroundStyle(color.ink.opacity(0.7))
                 }
-                .foregroundStyle(Color(hex: 0x20211E).opacity(0.4))
+                Spacer(minLength: 0)
             }
             .padding(18)
             .frame(width: DeskCardMetrics.width, height: DeskCardMetrics.height, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous)
-                    .strokeBorder(Color(hex: 0x20211E).opacity(0.18), style: StrokeStyle(lineWidth: 1.4, dash: [5, 4]))
-            )
+            .background(color.paper, in: RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(0.2), radius: 13, y: 8)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -18,7 +18,10 @@ struct SettingsView: View {
     @State private var corner: StickyCorner = StickyCorner.startCorner
     @State private var showColorPicker = false
     @State private var showFontPicker = false
+    @State private var connectingCalendar = false
     @Bindable var settings: AppSettings
+
+    private let auth = GoogleAuthService.shared
 
     var body: some View {
         Form {
@@ -35,9 +38,33 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Calendar") {
+                if auth.isConnected {
+                    LabeledContent("Google Calendar") {
+                        Text(auth.connectedEmail ?? "Connected")
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Disconnect", role: .destructive) { auth.disconnect() }
+                } else {
+                    Button(connectingCalendar ? "Connecting…" : "Connect Google Calendar") {
+                        connectCalendar()
+                    }
+                    .disabled(connectingCalendar)
+                }
+                Text("Only reads today's events to show on your Home screen — nothing is written back to your calendar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("New Sticky Defaults") {
                 LabeledContent("Color") { colorButton }
                 LabeledContent("Font") { fontButton }
+                Picker("Title Size", selection: $settings.titleSize) {
+                    ForEach(StickyTitleSize.allCases) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
                 Picker("Screen Position", selection: $corner) {
                     ForEach(StickyCorner.allCases) { c in
                         Text(c.displayName).tag(c)
@@ -155,5 +182,13 @@ struct SettingsView: View {
 
     private var placeholderName: String {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSFullUserName()
+    }
+
+    private func connectCalendar() {
+        connectingCalendar = true
+        Task {
+            defer { connectingCalendar = false }
+            try? await auth.connect()
+        }
     }
 }

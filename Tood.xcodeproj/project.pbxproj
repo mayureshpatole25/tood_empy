@@ -7,12 +7,25 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		A500000000000000000000A5 /* Today.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Today.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A500000000000000000000A5 /* Tood.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tood.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C100000000000000000000C1 /* Exceptions for "Today" folder in "Tood" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A200000000000000000000A2 /* Tood */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A600000000000000000000A6 /* Today */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C100000000000000000000C1 /* Exceptions for "Today" folder in "Today" target */,
+			);
 			path = Today;
 			sourceTree = "<group>";
 		};
@@ -40,7 +53,7 @@
 		A400000000000000000000A4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A500000000000000000000A5 /* Today.app */,
+				A500000000000000000000A5 /* Tood.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A200000000000000000000A2 /* Today */ = {
+		A200000000000000000000A2 /* Tood */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Today" */;
+			buildConfigurationList = B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Tood" */;
 			buildPhases = (
 				A700000000000000000000A7 /* Sources */,
 				A800000000000000000000A8 /* Frameworks */,
@@ -63,11 +76,11 @@
 			fileSystemSynchronizedGroups = (
 				A600000000000000000000A6 /* Today */,
 			);
-			name = Today;
+			name = Tood;
 			packageProductDependencies = (
 			);
-			productName = Today;
-			productReference = A500000000000000000000A5 /* Today.app */;
+			productName = Tood;
+			productReference = A500000000000000000000A5 /* Tood.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +98,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B100000000000000000000B1 /* Build configuration list for PBXProject "Today" */;
+			buildConfigurationList = B100000000000000000000B1 /* Build configuration list for PBXProject "Tood" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -100,7 +113,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A200000000000000000000A2 /* Today */,
+				A200000000000000000000A2 /* Tood */,
 			);
 		};
 /* End PBXProject section */
@@ -204,12 +217,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Today uses your location to add an optional location stamp to journal entries. This is never sent anywhere and stays on your Mac.";
-				INFOPLIST_KEY_NSMainNibFile = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Today/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -233,12 +242,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Today uses your location to add an optional location stamp to journal entries. This is never sent anywhere and stays on your Mac.";
-				INFOPLIST_KEY_NSMainNibFile = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Today/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -254,7 +259,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B100000000000000000000B1 /* Build configuration list for PBXProject "Today" */ = {
+		B100000000000000000000B1 /* Build configuration list for PBXProject "Tood" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B300000000000000000000B3 /* Debug */,
@@ -263,7 +268,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Today" */ = {
+		B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Tood" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B500000000000000000000B5 /* Debug */,
