@@ -67,17 +67,25 @@
   // capture on the whole card, which is what made clicking feel broken.
   function makeDraggable(el, initLeft, initTop) {
     var THRESHOLD = 4;
-    var startX, startY, originLeft, originTop, dragging = false, pointerId = null;
+    var startX, startY, originLeft, originTop, parentOffsetX, parentOffsetY, dragging = false, pointerId = null;
     el.style.position = "absolute";
     el.style.left = initLeft + "px";
     el.style.top = initTop + "px";
     el.style.margin = "0";
 
+    // el's containing block is .cards-row (its nearest positioned ancestor),
+    // not .scene — but dragging/clamping should still feel like "anywhere
+    // on screen". So all the math below works in scene-relative coordinates,
+    // then converts to cards-row-relative only at the very end, right
+    // before writing el.style.left/top.
     el.addEventListener("pointerdown", function (e) {
       if (e.target.classList.contains("sticky-text") || e.target.classList.contains("sticky-box")) return;
       pointerId = e.pointerId;
       dragging = false;
       var sr = scene.getBoundingClientRect();
+      var pr = el.offsetParent.getBoundingClientRect();
+      parentOffsetX = pr.left - sr.left;
+      parentOffsetY = pr.top - sr.top;
       var er = el.getBoundingClientRect();
       originLeft = er.left - sr.left;
       originTop = er.top - sr.top;
@@ -99,8 +107,8 @@
       var sr = scene.getBoundingClientRect();
       var newLeft = Math.max(-60, Math.min(sr.width - 60, originLeft + dx));
       var newTop = Math.max(-40, Math.min(sr.height - 60, originTop + dy));
-      el.style.left = newLeft + "px";
-      el.style.top = newTop + "px";
+      el.style.left = (newLeft - parentOffsetX) + "px";
+      el.style.top = (newTop - parentOffsetY) + "px";
     });
     function endDrag() {
       if (dragging) {
@@ -124,11 +132,16 @@
   function initCards() {
     var headline = document.getElementById("headlineCard");
     var sticky = document.getElementById("sticky");
-    var sceneRect = scene.getBoundingClientRect();
+    // Measure each card's offset relative to its own offsetParent (the
+    // nearest positioned ancestor, i.e. .cards-row) — that's the box its
+    // left/top will actually be resolved against once it becomes
+    // position:absolute, so this is what keeps it from jumping.
+    var hParentRect = headline.offsetParent.getBoundingClientRect();
+    var sParentRect = sticky.offsetParent.getBoundingClientRect();
     var hRect = headline.getBoundingClientRect();
     var sRect = sticky.getBoundingClientRect();
-    makeDraggable(headline, hRect.left - sceneRect.left, hRect.top - sceneRect.top);
-    makeDraggable(sticky, sRect.left - sceneRect.left, sRect.top - sceneRect.top);
+    makeDraggable(headline, hRect.left - hParentRect.left, hRect.top - hParentRect.top);
+    makeDraggable(sticky, sRect.left - sParentRect.left, sRect.top - sParentRect.top);
   }
   if (document.readyState === "complete") {
     requestAnimationFrame(function () { requestAnimationFrame(initCards); });
