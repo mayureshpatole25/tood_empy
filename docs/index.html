@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tood — a calmer home for your to-dos</title>
 <meta name="description" content="Tood is a native Mac app: sticky notes that live right on your desktop. Download for free.">
-<link rel="icon" href="assets/icon.png">
+<link rel="icon" href="assets/toodicon.png?v=2">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,6 +14,7 @@
   <div class="scene-bg"></div>
   <div class="menubar">
     <div class="left">
+      <svg class="apple-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zm3.63-3.325c.831-1.012 1.395-2.402 1.24-3.805-1.201.052-2.674.799-3.55 1.812-.774.884-1.443 2.31-1.267 3.674 1.31.104 2.678-.68 3.578-1.68z"/></svg>
       <span class="app-name">Tood</span>
       <span class="dim">File</span>
       <span class="dim">Edit</span>
@@ -33,7 +34,10 @@
 
   <div class="cards-row">
     <div class="headline-card card-shared" id="headlineCard">
-      <div>Things</div><div>To</div><div>Do</div><div>Today</div>
+      <div class="headline-lines">
+        <div>Things</div><div>To</div><div>Do</div><div>Today</div>
+      </div>
+      <p class="headline-blurb">Little to-dos that live on your desktop.</p>
     </div>
     <div class="sticky card-shared" id="sticky">
       <div class="sticky-head">
@@ -44,7 +48,7 @@
     </div>
   </div>
 
-  <div class="credit">Made with care by <a href="https://github.com/reneezhang99" target="_blank" rel="noopener">Renee</a> — Sydney &amp; California</div>
+  <div class="credit">Made with care by <a href="https://renee.wiki/" target="_blank" rel="noopener">Renee</a> — Sydney &amp; California</div>
   <div class="requirements">macOS 14+ · Apple Silicon &amp; Intel</div>
 
   <div class="dock-wrap">
@@ -61,6 +65,10 @@
         <img src="assets/dock/slack.png?v=2" alt="Slack">
         <span class="dock-tooltip">Slack</span>
       </li>
+      <li class="dock-item tood">
+        <img src="assets/icon.png?v=3" alt="Tood">
+        <span class="dock-tooltip">Tood</span>
+      </li>
       <li class="dock-item plain">
         <img src="assets/dock/claude.png" alt="Claude">
         <span class="dock-tooltip">Claude</span>
@@ -68,10 +76,6 @@
       <li class="dock-item plain">
         <img src="assets/dock/safari.png" alt="Safari">
         <span class="dock-tooltip">Safari</span>
-      </li>
-      <li class="dock-item tood">
-        <img src="assets/icon.png?v=2" alt="Tood">
-        <span class="dock-tooltip">Tood</span>
       </li>
     </ul>
   </div>

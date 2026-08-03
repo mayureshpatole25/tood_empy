@@ -11,6 +11,23 @@
   var scene = document.getElementById("scene");
   var rows = document.getElementById("stickyRows");
 
+  // A different wallpaper per visit: pick one at random on every load,
+  // set as early as possible (before anything else runs) so there's no
+  // visible swap once the page has painted.
+  var WALLPAPERS = [
+    "assets/wallpaper.jpg",
+    "assets/wallpapers/macOS3.jpg",
+    "assets/wallpapers/macOS4.jpg",
+    "assets/wallpapers/macOS5.jpg",
+    "assets/wallpapers/macOS14.jpg",
+    "assets/wallpapers/macOS15.jpg"
+  ];
+  var sceneBg = document.querySelector(".scene-bg");
+  if (sceneBg) {
+    var pick = WALLPAPERS[Math.floor(Math.random() * WALLPAPERS.length)];
+    sceneBg.style.backgroundImage = "url(\"" + pick + "\")";
+  }
+
   // Real interactivity, matching the actual app: click a box to strike
   // a line through it, click text to edit it, press Enter at the end of
   // a line to open a new blank one right below (focused and ready to
@@ -143,13 +160,38 @@
     makeDraggable(headline, hRect.left - hParentRect.left, hRect.top - hParentRect.top);
     makeDraggable(sticky, sRect.left - sParentRect.left, sRect.top - sParentRect.top);
   }
+
+  // Everything inside .scene is position:absolute, so the scene's own box
+  // never naturally grows to fit its content (e.g. when the cards wrap to
+  // two rows on a narrow window). Without this, .dock-wrap/.credit — both
+  // pinned to the scene's bottom edge — would sit under a fixed 100vh mark
+  // instead of below the real content, and the page couldn't scroll far
+  // enough to reach anything below that mark.
+  function updateSceneHeight() {
+    var cards = document.querySelectorAll(".card-shared");
+    var sceneRect = scene.getBoundingClientRect();
+    var maxBottom = 0;
+    cards.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      maxBottom = Math.max(maxBottom, r.bottom - sceneRect.top);
+    });
+    var dockSpace = 140; // room for the dock + credit line below the cards
+    scene.style.minHeight = Math.max(window.innerHeight, maxBottom + dockSpace) + "px";
+  }
+
   if (document.readyState === "complete") {
-    requestAnimationFrame(function () { requestAnimationFrame(initCards); });
+    requestAnimationFrame(function () { requestAnimationFrame(function () { initCards(); updateSceneHeight(); }); });
   } else {
     window.addEventListener("load", function () {
-      requestAnimationFrame(function () { requestAnimationFrame(initCards); });
+      requestAnimationFrame(function () { requestAnimationFrame(function () { initCards(); updateSceneHeight(); }); });
     });
   }
+
+  var resizeTimer = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(updateSceneHeight, 120);
+  });
 
   var dockItems = document.querySelectorAll(".dock-item");
   function toggleSibling(items, index, offset, cls, add) {

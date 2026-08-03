@@ -25,14 +25,8 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
   font-family: var(--font-display);
-}
-
-@media (max-width: 640px), (max-height: 560px) {
-  html, body { height: auto; overflow: auto; }
-  .scene { height: 100vh; min-height: 680px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -44,11 +38,12 @@ a { color: inherit; }
 .scene {
   position: relative;
   width: 100vw;
-  height: 100vh;
+  min-height: 100vh;
   overflow: hidden;
   background: #bcdff0;
   user-select: none;
   -webkit-user-select: none;
+  cursor: url("assets/frog-cursor.png?v=2") 30 14, auto;
 }
 
 /* separate layer for the photo so the saturation/contrast bump below
@@ -56,7 +51,10 @@ a { color: inherit; }
 .scene-bg {
   position: absolute;
   inset: 0;
-  background: url("assets/wallpaper.jpg") center center / cover no-repeat;
+  background-color: #bcdff0;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
   filter: saturate(1.1) contrast(1.04);
   z-index: 0;
 }
@@ -86,13 +84,14 @@ a { color: inherit; }
   -webkit-backdrop-filter: blur(20px) saturate(1.6);
   font-size: clamp(10.5px, 1.05vw, 12.5px);
   font-weight: 500;
-  color: rgba(20, 20, 18, 0.78);
+  color: #000;
   z-index: 20;
 }
 
 .menubar .left, .menubar .right { display: flex; align-items: center; gap: clamp(10px, 1.5vw, 17px); }
+.menubar .apple-logo { width: clamp(11px, 1.05vw, 13px); height: clamp(11px, 1.05vw, 13px); flex: none; }
 .menubar .app-name { font-weight: 700; }
-.menubar .dim { opacity: 0.62; }
+.menubar .dim { opacity: 1; }
 .menubar .right { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* ---------- wordmark + download, pinned top ---------- */
@@ -116,16 +115,22 @@ a { color: inherit; }
   position: absolute;
   top: clamp(70px, 11.4vw, 106px);
   left: clamp(18px, 3.4vw, 40px);
+  right: clamp(18px, 3.4vw, 40px);
   display: flex;
-  gap: clamp(16px, 2.6vw, 32px);
+  flex-wrap: wrap;
+  gap: 24px;
   z-index: 8;
 }
 
+/* Fixed size, on purpose: the to-do list should never shrink or scale —
+   on a narrow window/phone the row above just runs out of horizontal
+   room and wraps the sticky note underneath the headline card instead. */
 .card-shared {
-  width: clamp(230px, 21vw, 340px);
-  height: clamp(360px, 50vh, 520px);
+  width: 300px;
+  height: 450px;
+  flex: none;
   border-radius: 5px;
-  padding: clamp(18px, 2vw, 26px) clamp(20px, 2.2vw, 28px);
+  padding: 22px 24px;
 }
 
 .headline-card {
@@ -133,17 +138,25 @@ a { color: inherit; }
   box-shadow: 0 22px 44px -14px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: space-between;
   cursor: grab;
   touch-action: none;
   transition: box-shadow .15s ease;
 }
-.headline-card div {
+.headline-lines div {
   font-weight: 400;
-  font-size: clamp(30px, 3.6vw, 46px);
+  font-size: 40px;
   line-height: 0.98;
   letter-spacing: -0.01em;
   color: #fff;
+}
+.headline-blurb {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 92%;
 }
 
 .top-download {
@@ -178,6 +191,7 @@ a { color: inherit; }
 
 .dock {
   pointer-events: auto;
+  cursor: default;
   display: flex;
   align-items: flex-end;
   gap: clamp(5px, 0.9vw, 10px);
@@ -204,9 +218,9 @@ a { color: inherit; }
   justify-content: center;
   cursor: pointer;
   background: #eceae3;
-  overflow: hidden;
+  overflow: visible;
 }
-.dock-item img { width: 100%; height: 100%; display: block; }
+.dock-item img { width: 100%; height: 100%; display: block; border-radius: 24%; }
 
 /* Real app icons already come with their own rounded-square artwork
    baked in — no neutral tile or extra padding behind them, same
@@ -216,12 +230,37 @@ a { color: inherit; }
 .dock-item.plain img { border-radius: 22%; }
 
 .dock-tooltip {
-  position: absolute; top: 0; left: 50%; transform: translate(-50%, -80%);
-  background: rgba(20,20,18,.92); color: #fff; font-size: 11px; font-weight: 500;
-  padding: 4px 8px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none;
-  transition: opacity .5s cubic-bezier(.16,1,.3,1), transform .5s cubic-bezier(.16,1,.3,1);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(2px);
+  margin-bottom: 14px;
+  background: rgba(232, 233, 226, 0.92);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  color: #1c1d1a;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 13px;
+  border-radius: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0,0,0,.22);
+  transition: opacity .15s ease, transform .15s ease;
 }
-.dock-item.hover .dock-tooltip { opacity: 1; transform: translate(-50%, -140%); }
+.dock-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 12px;
+  height: 7px;
+  transform: translateX(-50%);
+  background: rgba(232, 233, 226, 0.92);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.dock-item.hover .dock-tooltip { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---------- the sticky, matching the real app ---------- */
 
@@ -235,7 +274,7 @@ a { color: inherit; }
 .sticky.dragging, .headline-card.dragging { cursor: grabbing; z-index: 50 !important; box-shadow: 0 30px 56px -12px rgba(0,0,0,.5); transition: none; }
 
 .sticky-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
-.sticky-title { font-weight: 400; font-size: clamp(30px, 3.6vw, 46px); color: var(--sticky-title); line-height: 1; letter-spacing: -0.01em; }
+.sticky-title { font-weight: 400; font-size: 40px; color: var(--sticky-title); line-height: 1; letter-spacing: -0.01em; }
 .sticky-date { font-family: var(--font-mono); font-size: 10.5px; color: rgba(32,33,30,.4); padding-top: 5px; white-space: nowrap; }
 
 .sticky-row { display: flex; align-items: center; gap: 9px; padding: 6px 0; border-bottom: 1px solid rgba(32,33,30,.14); }
@@ -244,7 +283,7 @@ a { color: inherit; }
 .sticky-row.done .sticky-box { background: rgba(32,33,30,.3); border-color: transparent; }
 .sticky-text {
   font-family: "ABCStefanTrial", var(--font-display);
-  font-size: clamp(13.5px, 1.25vw, 15.5px); /* Stefan's x-height runs small, same +size bump the real app applies */
+  font-size: 15px; /* Stefan's x-height runs small, same +size bump the real app applies */
   line-height: 1.3; color: rgba(32,33,30,.82); outline: none; cursor: text;
 }
 .sticky-row.done .sticky-text { color: rgba(32,33,30,.42); text-decoration: line-through; }
@@ -276,9 +315,9 @@ a { color: inherit; }
 }
 
 @media (max-width: 640px) {
-  .cards-row { flex-direction: column; top: 90px; }
-  .card-shared { width: 74vw; height: 220px; }
   .dock-item { width: 32px; height: 32px; }
   .topbar { gap: 14px; }
   .credit, .requirements { display: none; }
+  .top-download { font-size: 12px; padding: 9px 14px; gap: 6px; }
+  .top-download svg { width: 13px; height: 13px; }
 }
