@@ -14,8 +14,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var introWindow: HostedWindowController<IntroFallView>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Menu-bar-only agent: no Dock icon, no app menu bar takeover.
-        NSApp.setActivationPolicy(.accessory)
+        // Regular app: Dock icon visible, matches LSUIElement=false in
+        // Info.plist. (This call is what actually governs it at runtime —
+        // Info.plist's LSUIElement alone isn't enough once the app is
+        // already running.)
+        NSApp.setActivationPolicy(.regular)
 
         // The whole design (cream paper, dark ink text) is deliberately
         // light-only — there's no dark palette for it. Without this, macOS
@@ -58,6 +61,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Re-launching the app while it's already running (e.g. opening it
     // again from Finder/Spotlight) brings Home back along with the notes.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        // Guard against the Dock icon (now always visible) being clicked
+        // mid-onboarding — that shouldn't reveal every sticky and Home
+        // before onboarding's own "Sticky" step gets to do that itself.
+        guard AppSettings.shared.onboardingCompleted else { return true }
         manager.showAll()
         showHome()
         return true
@@ -79,6 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         homeWindow?.present()
+        // The periodic refresh in AgendaTimeline can be up to 5 minutes
+        // stale — an immediate one here makes reopening Home feel current
+        // right away instead of waiting for the next tick.
+        Task { await GoogleCalendarService.shared.refreshToday() }
     }
 
     func showSettings() {
@@ -119,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
                 self?.manager.showAll()
+                self?.showHome()
             }, onExitToIntro: { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil

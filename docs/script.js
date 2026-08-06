@@ -225,3 +225,26 @@
   document.getElementById("clock").textContent = days[now.getDay()] + " " + h12 + ":" + m + " " + ampm;
   document.getElementById("sdate").textContent = months[now.getMonth()] + " " + now.getDate() + ", " + now.getFullYear();
 })();
+
+(function () {
+  "use strict";
+  var SEEN_KEY = "toodWhatsNewCandyV1";
+  var overlay = document.getElementById("whatsnewOverlay");
+  if (!overlay) return;
+
+  var alreadySeen;
+  try { alreadySeen = localStorage.getItem(SEEN_KEY); } catch (e) { alreadySeen = null; }
+  if (alreadySeen) { overlay.parentNode.removeChild(overlay); return; }
+
+  function dismiss() {
+    overlay.classList.remove("show");
+    try { localStorage.setItem(SEEN_KEY, "1"); } catch (e) {}
+  }
+
+  setTimeout(function () { overlay.classList.add("show"); }, 900);
+
+  document.getElementById("whatsnewClose").addEventListener("click", dismiss);
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && overlay.classList.contains("show")) dismiss();
+  });
+})();

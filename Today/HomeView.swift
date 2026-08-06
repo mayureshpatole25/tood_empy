@@ -25,6 +25,7 @@ struct HomeView: View {
     @State private var showingJournal = false
     @State private var locationLabel: String?
     @State private var journalHover = false
+    @State private var addCardHover = false
 
     private let desk = Color(hex: 0xFBF8F1)
 
@@ -105,6 +106,11 @@ struct HomeView: View {
     /// more stickies are added (see `fanPositions`), always fitting the
     /// available width instead of needing to scroll past an edge. That also
     /// means shadows render in full; nothing's there to cut them off.
+    ///
+    /// "Add another" lives right in the fan itself — one more card slot
+    /// (same size/rotation math as a real sticky) rather than a separate
+    /// floating button, so it reads as part of the pile instead of a
+    /// bolted-on control.
     private var stickiesFan: some View {
         Group {
             if manager.order.isEmpty {
@@ -112,7 +118,8 @@ struct HomeView: View {
             } else {
                 GeometryReader { proxy in
                     ZStack(alignment: .topLeading) {
-                        let positions = fanPositions(count: manager.order.count, availableWidth: proxy.size.width)
+                        let count = manager.order.count
+                        let positions = fanPositions(count: count + 1, availableWidth: proxy.size.width)
                         ForEach(Array(manager.order.enumerated()), id: \.element) { index, id in
                             if let controller = manager.controllers[id] {
                                 StickyDeskCard(model: controller.model) { manager.bringToFront(id) }
@@ -122,6 +129,10 @@ struct HomeView: View {
                                     .transition(.scale(scale: 0.85).combined(with: .opacity))
                             }
                         }
+                        addStickyGhostCard
+                            .rotationEffect(.degrees(rotation(for: count))) // same fan math a real inserted sticky would get
+                            .offset(x: positions[count], y: verticalOffset(for: count))
+                            .zIndex(Double(count))
                     }
                 }
             }
@@ -129,6 +140,39 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .frame(height: DeskCardMetrics.height + 45) // card height + rotation/hover/shadow headroom
         .animation(.spring(response: 0.4, dampingFraction: 0.75), value: manager.order)
+    }
+
+    /// The trailing "next slot" in the fan — a thin, warm-toned dotted
+    /// outline rather than the fan's own ink color, kept quiet enough that
+    /// it never competes with an actual sticky. Hover behavior mirrors
+    /// `StickyDeskCard`'s own lift, plus the outline/fill/glyph deepening
+    /// a touch — same interaction as a real card, so it reads as one of
+    /// them instead of a static placeholder.
+    private var addStickyGhostCard: some View {
+        // A shaded-down version of the desk's own cream (#FBF8F1), not a
+        // neutral grey — mixing toward the ink color rather than just
+        // scaling brightness, since cream is close enough to white that a
+        // naive darken loses its warmth and reads as grey again.
+        let warmGrey = Color(.sRGB, red: 0.659, green: 0.612, blue: 0.510, opacity: 1) // #A89C82
+        return Button { manager.newSticky() } label: {
+            RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous)
+                .strokeBorder(warmGrey.opacity(addCardHover ? 0.85 : 0.65), style: StrokeStyle(lineWidth: 1.3, dash: [4, 3.5]))
+                .background(
+                    RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous)
+                        .fill(warmGrey.opacity(addCardHover ? 0.09 : 0.05))
+                )
+                .frame(width: DeskCardMetrics.width, height: DeskCardMetrics.height)
+                .overlay(
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .light))
+                        .foregroundStyle(warmGrey.opacity(addCardHover ? 0.9 : 0.75))
+                )
+                .offset(y: addCardHover ? -9 : 0)
+        }
+        .buttonStyle(.plain)
+        .onHover { addCardHover = $0 }
+        .animation(.easeInOut(duration: 0.15), value: addCardHover)
+        .help("New sticky")
     }
 
     /// Zero stickies — a real sticky (same paper/title look as

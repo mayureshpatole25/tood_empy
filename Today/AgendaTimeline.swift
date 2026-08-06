@@ -23,6 +23,23 @@ struct AgendaTimeline: View {
         .task(id: auth.isConnected) {
             await calendar.refreshToday()
         }
+        // This app runs for days without relaunching, so a one-time fetch on
+        // connect goes stale — wrong day after midnight, edited meeting
+        // times never picked up. Keep refreshing periodically for as long
+        // as this view is actually on screen.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(300))
+                await calendar.refreshToday()
+            }
+        }
+        // A quiet manual override for the impatient case — just mousing
+        // over the agenda re-syncs immediately rather than waiting on the
+        // 5-minute background loop. No visible refresh button needed.
+        .onHover { isHovering in
+            guard isHovering, auth.isConnected, !calendar.isLoading else { return }
+            Task { await calendar.refreshToday() }
+        }
     }
 
     @ViewBuilder

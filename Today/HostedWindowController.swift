@@ -7,6 +7,7 @@ import SwiftUI
 @MainActor
 final class HostedWindowController<Content: View>: NSWindowController {
     private var keyMonitor: Any?
+    private var deminiaturizeObserver: NSObjectProtocol?
 
     /// `hidesTitleBar`: no title-bar chrome at all — no strip, no title
     /// text, no traffic lights. Keeps `.titled` under the hood (just
@@ -30,6 +31,21 @@ final class HostedWindowController<Content: View>: NSWindowController {
         window.isReleasedWhenClosed = false // we reuse/reshow the same controller rather than recreating it
         window.contentView = NSHostingView(rootView: content)
         self.init(window: window)
+
+        // NSHostingView doesn't always repaint its full bounds after the
+        // genie-effect restore from the Dock — it can come back visually
+        // clipped to a smaller size until something else forces a layout
+        // pass. Nudging the content view here (rather than the window
+        // itself, which is already the right size) fixes that without a
+        // visible resize flicker.
+        deminiaturizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didDeminiaturizeNotification, object: window, queue: .main
+        ) { [weak window] _ in
+            guard let contentView = window?.contentView else { return }
+            contentView.needsLayout = true
+            contentView.layoutSubtreeIfNeeded()
+            contentView.needsDisplay = true
+        }
 
         if hidesTitleBar {
             window.titlebarAppearsTransparent = true
@@ -56,6 +72,7 @@ final class HostedWindowController<Content: View>: NSWindowController {
 
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+        if let deminiaturizeObserver { NotificationCenter.default.removeObserver(deminiaturizeObserver) }
     }
 
     func present() {

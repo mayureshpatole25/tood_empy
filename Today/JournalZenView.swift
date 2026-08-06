@@ -13,26 +13,41 @@ struct JournalZenView: View {
     var onDone: () -> Void
 
     @FocusState private var bodyFocused: Bool
+    @State private var showHistory = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(Self.dateFormatter.string(from: Date()))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .padding(.bottom, 22)
+            HStack(spacing: 8) {
+                Text(Self.dateFormatter.string(from: Date()))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                // Subtle by design — this is a "look back" affordance, not
+                // the point of the page.
+                Button { showHistory = true } label: {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+                .buttonStyle(.plain)
+                .help("Past entries")
+            }
+            .padding(.bottom, 22)
 
             ZStack(alignment: .topLeading) {
                 if journal.todaysText.isEmpty {
                     Text(AppSettings.shared.journalPrompt)
                         .font(.system(size: 17))
                         .foregroundStyle(.secondary.opacity(0.5))
-                        .padding(.top, 8)
                         .padding(.leading, 5)
                 }
                 TextEditor(text: textBinding)
                     .font(.system(size: 17))
                     .lineSpacing(6)
                     .scrollContentBackground(.hidden)
+                    .foregroundStyle(Color(hex: 0x20211E))
+                    .tint(Color(hex: 0x20211E))
+                    .contentMargins(.top, 0, for: .scrollContent)
                     .focused($bodyFocused)
             }
 
@@ -54,6 +69,9 @@ struct JournalZenView: View {
         .frame(width: 640, height: 520)
         .background(Color(hex: 0xFEFCF6))
         .onAppear { bodyFocused = true }
+        .sheet(isPresented: $showHistory) {
+            JournalHistoryView(journal: journal, onDone: { showHistory = false })
+        }
     }
 
     private var textBinding: Binding<String> {

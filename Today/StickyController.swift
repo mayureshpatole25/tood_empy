@@ -10,8 +10,9 @@ final class StickyController: NSObject, NSWindowDelegate {
     private weak var manager: StickyManager?
     private var keyMonitor: Any?
     private var selectionObserver: NSObjectProtocol?
+    private var deminiaturizeObserver: NSObjectProtocol?
     private var suppressNextAutoSelect = false
-    private var hosting: NSHostingView<StickyRootView>!
+    private var hosting: StickyHostingView!
 
     init(model: StickyModel, manager: StickyManager) {
         self.model = model
@@ -20,7 +21,7 @@ final class StickyController: NSObject, NSWindowDelegate {
         super.init()
 
         let root = StickyRootView(model: model, controller: self)
-        hosting = NSHostingView(rootView: root)
+        hosting = StickyHostingView(rootView: root)
         hosting.frame = panel.contentLayoutRect
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
@@ -36,6 +37,18 @@ final class StickyController: NSObject, NSWindowDelegate {
 
         if model.isVisible { show() }
         growToFitCurrentContent() // in case a restored sticky already overflows
+
+        // Same NSHostingView restore glitch as the main window (see
+        // HostedWindowController) — force a layout pass after the genie
+        // effect brings the sticky back from the Dock.
+        deminiaturizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didDeminiaturizeNotification, object: panel, queue: .main
+        ) { [weak hosting] _ in
+            guard let hosting else { return }
+            hosting.needsLayout = true
+            hosting.layoutSubtreeIfNeeded()
+            hosting.needsDisplay = true
+        }
 
         // SwiftUI's TextField consumes the delete key for its own editing
         // before onKeyPress(.delete) ever sees it — even when the field is
@@ -59,6 +72,20 @@ final class StickyController: NSObject, NSWindowDelegate {
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "d" {
                 self.closeSticky() // deletes it — closing a sticky is always a delete in this app
                 return nil
+            }
+            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v",
+               let focusedID = self.model.focusedItemID,
+               let clipboard = NSPasteboard.general.string(forType: .string) {
+                let lines = clipboard
+                    .components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+                // A single line is just a normal paste — only intercept
+                // when there's actually something to split across rows.
+                if lines.count > 1 {
+                    self.model.onMultilinePaste?(lines, focusedID)
+                    return nil
+                }
             }
 
             guard event.keyCode == 51 /* delete */,
@@ -94,6 +121,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     deinit {
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         if let selectionObserver { NotificationCenter.default.removeObserver(selectionObserver) }
+        if let deminiaturizeObserver { NotificationCenter.default.removeObserver(deminiaturizeObserver) }
     }
 
     /// Call right before programmatically moving focus to a row, so the
@@ -213,6 +241,10 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     func requestNewSticky() { manager?.newSticky() }
 
+    /// Genie-effect minimizes to the Dock, same as any other window —
+    /// unlike closing, this doesn't delete the sticky.
+    func minimizeSticky() { panel.miniaturize(nil) }
+
     func deleteSticky() { manager?.remove(model.id) }
 
     /// Closing a sticky deletes it (it won't come back on reopen).
@@ -231,5 +263,31 @@ final class StickyController: NSObject, NSWindowDelegate {
     private func syncFrame() {
         model.frame = panel.frame
         manager?.scheduleSave()
+    }
+}
+
+/// Adds a resize cursor along the sticky's draggable edges. Plain
+/// `NSHostingView` doesn't manage cursor rects at all, and AppKit only
+/// recomputes them when it feels like it — after a *programmatic* resize
+/// (`growBy`/`collapse`, not a live mouse drag) the old rects, sized for
+/// the sticky's previous bounds, were left standing: the resize cursor
+/// silently stopped appearing past wherever the sticky's height last
+/// changed by hand, even though `StickyPanel`'s own hit-testing (computed
+/// fresh on every click) kept resizing just fine. Forcing an invalidation
+/// on every layout pass keeps the two in sync.
+final class StickyHostingView: NSHostingView<StickyRootView> {
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        let edge = StickyPanel.resizeEdge
+        let b = bounds
+        addCursorRect(NSRect(x: 0, y: 0, width: edge, height: b.height), cursor: .resizeLeftRight)
+        addCursorRect(NSRect(x: b.width - edge, y: 0, width: edge, height: b.height), cursor: .resizeLeftRight)
+        addCursorRect(NSRect(x: 0, y: 0, width: b.width, height: edge), cursor: .resizeUpDown)
+        addCursorRect(NSRect(x: 0, y: b.height - edge, width: b.width, height: edge), cursor: .resizeUpDown)
+    }
+
+    override func layout() {
+        super.layout()
+        window?.invalidateCursorRects(for: self)
     }
 }

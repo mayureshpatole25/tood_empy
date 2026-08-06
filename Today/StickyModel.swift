@@ -46,6 +46,11 @@ final class StickyModel: Identifiable {
     /// from the AppKit-level controller, so this is the same bridge pattern.
     @ObservationIgnored var onRequestFocus: (() -> Void)?
 
+    /// Set by the view; invoked by the window's key monitor when ⌘V pastes
+    /// multi-line text — same bridge pattern, since focusing the resulting
+    /// last row needs SwiftUI's `@FocusState`, not visible from here either.
+    @ObservationIgnored var onMultilinePaste: (([String], UUID) -> Void)?
+
     init(data: StickyData) {
         self.id = data.id
         self.title = data.title
@@ -66,14 +71,11 @@ final class StickyModel: Identifiable {
     }
 
     // MARK: - Ordering
-    // Active items first (in insertion order), completed sink to the bottom
-    // in completion order. There is no manual reordering (like Apple Notes).
-    var orderedItems: [TodoItem] {
-        let active = items.filter { !$0.isDone }
-        let done = items.filter { $0.isDone }
-            .sorted { ($0.completedAt ?? .distantPast) < ($1.completedAt ?? .distantPast) }
-        return active + done
-    }
+    // Whatever order `items` is actually in — checking a row off no longer
+    // moves it; it just strikes through in place. The only thing that
+    // changes order is dragging a row (handled directly in
+    // StickyRootView's drag gesture, which mutates `items` itself).
+    var orderedItems: [TodoItem] { items }
 
     // MARK: - Mutations (each notifies the manager to persist)
 
@@ -95,6 +97,30 @@ final class StickyModel: Identifiable {
         onChange?()
     }
 
+    /// Splits a multi-line paste into one item per line. If the target row
+    /// is still empty, the first line fills it and the rest become new
+    /// items after it; otherwise the whole paste becomes new items after
+    /// the target, leaving what's already typed there alone. Returns the
+    /// last inserted item's id, to focus.
+    @discardableResult
+    func pasteLines(_ lines: [String], after targetID: UUID) -> UUID? {
+        guard let idx = items.firstIndex(where: { $0.id == targetID }) else { return nil }
+        var remaining = lines
+        var insertAt = idx + 1
+        if items[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !remaining.isEmpty {
+            items[idx].text = remaining.removeFirst()
+        }
+        var lastID: UUID?
+        for line in remaining {
+            let newItem = TodoItem(text: line)
+            items.insert(newItem, at: insertAt)
+            insertAt += 1
+            lastID = newItem.id
+        }
+        onChange?()
+        return lastID ?? targetID
+    }
+
     func toggle(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].isDone.toggle()
@@ -106,6 +132,7 @@ final class StickyModel: Identifiable {
         items.removeAll { $0.id == id }
         onChange?()
     }
+
 
     func setColor(_ c: StickyColor) { colorID = c; onChange?() }
     func setFont(_ f: StickyFont) { fontID = f; onChange?() }

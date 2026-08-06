@@ -10,13 +10,16 @@ final class StickyPanel: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
-    private let edge: CGFloat = 8
+    /// Shared with `StickyHostingView`'s cursor rects so the visible resize
+    /// cursor and the actual draggable zone never drift apart.
+    static let resizeEdge: CGFloat = 8
+    private let edge: CGFloat = StickyPanel.resizeEdge
     private let resizeMin = NSSize(width: 220, height: 300)
 
     init(frame: NSRect) {
         super.init(
             contentRect: frame,
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )

@@ -70,7 +70,9 @@ struct OnboardingView: View {
             stepHeading("Pick a default color", "You can always change an individual sticky's color later.")
             HStack(spacing: 14) {
                 swatchButton(nil, label: "Random")
-                ForEach(StickyColor.allCases) { c in
+                // Free colors only — paid packs are discovered later, from
+                // a sticky's own color picker, not during first-run setup.
+                ForEach(StickyColor.allCases.filter { $0.pack == nil }) { c in
                     swatchButton(c, label: c.displayName)
                 }
             }
@@ -82,7 +84,7 @@ struct OnboardingView: View {
             VStack(spacing: 6) {
                 Circle()
                     .fill(c.map { AnyShapeStyle($0.paper) }
-                        ?? AnyShapeStyle(.conicGradient(colors: StickyColor.allCases.map(\.paper), center: .center)))
+                        ?? AnyShapeStyle(.conicGradient(colors: StickyColor.allCases.filter { $0.pack == nil }.map(\.paper), center: .center)))
                     .frame(width: 40, height: 40)
                     .overlay(Circle().stroke(.primary, lineWidth: color == c ? 2 : 0).padding(-3))
                 Text(label).font(.system(size: 11)).foregroundStyle(.secondary)
@@ -152,6 +154,7 @@ struct OnboardingView: View {
                     .textFieldStyle(.plain)
                     .font(sticky.font.body(14))
                     .foregroundStyle(sticky.color.ink.opacity(0.8))
+                    .tint(sticky.color.ink) // same green-on-green cursor issue as the real sticky
                     .focused($itemFieldFocused)
             }
         }

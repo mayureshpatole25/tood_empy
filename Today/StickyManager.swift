@@ -30,7 +30,15 @@ final class StickyManager {
 
     func restoreAll() {
         if !persistence.hasSavedFile {
-            newSticky() // true first run: give Renee a note to type into
+            // True first run: seed a note to type into, but keep it hidden —
+            // StickyController's init shows any controller whose model is
+            // already isVisible, which used to flash this on screen before
+            // onboarding even started. The "Sticky" step is what's supposed
+            // to reveal it, via its own explicit bringToFront().
+            let model = StickyModel.makeNew(at: cascadeOrigin(), color: .nextNewStickyColor())
+            model.isVisible = false
+            addController(for: model)
+            scheduleSave()
         } else {
             // File exists — respect it even if empty (all stickies deleted).
             for data in persistence.load() {

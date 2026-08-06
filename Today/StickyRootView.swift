@@ -11,6 +11,8 @@ struct StickyRootView: View {
     @State private var hovering = false
     @State private var showColors = false
     @State private var showFonts = false
+    @State private var paywallPack: ColorPack?
+    private var packStore: ColorPackStore { ColorPackStore.shared }
     /// The window's current available height, tracked live so the collapse
     /// threshold below stays in sync as the sticky is dragged bigger/smaller.
     @State private var availableHeight: CGFloat = 490
@@ -28,13 +30,10 @@ struct StickyRootView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .fill(color.paper)
-            GrainOverlay()
-                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            paperBackground
             content
             bottomToolbar
-            closeButton
+            topRightButtons
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         // A `.background` GeometryReader reads the window's current height
@@ -50,6 +49,9 @@ struct StickyRootView: View {
             }
         )
         .contextMenu { contextMenu }
+        .sheet(item: $paywallPack) { pack in
+            ColorPackPaywallView(pack: pack) { }
+        }
         .onHover { hovering = $0 }
         .onAppear {
             focusedID = model.items.first?.id
@@ -62,8 +64,23 @@ struct StickyRootView: View {
             model.onRequestFocus = {
                 focusedID = model.items.first(where: { !$0.isDone })?.id ?? model.items.first?.id
             }
+            model.onMultilinePaste = { lines, targetID in
+                if let lastID = model.pasteLines(lines, after: targetID) {
+                    focusedID = lastID
+                }
+            }
         }
         .onChange(of: focusedID) { _, new in model.focusedItemID = new }
+    }
+
+    /// The flat paper itself.
+    private var paperBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(color.paper)
+            GrainOverlay()
+                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        }
     }
 
     // MARK: - Content
@@ -107,6 +124,7 @@ struct StickyRootView: View {
                     .font(.custom("HelveticaNeue", size: titleSize))
                     .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
                     .foregroundStyle(color.titleInk)
+                    .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
                     .lineLimit(1...2)
                     .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
                     .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
@@ -155,13 +173,28 @@ struct StickyRootView: View {
         Binding(get: { model.title }, set: { model.setTitle($0) })
     }
 
-    /// Small dismiss button pinned to the top-right corner, independent of
+    /// Minimize + dismiss, pinned to the top-right corner, independent of
     /// the bottom hover toolbar. Kept very low-opacity so it doesn't compete
     /// with the date.
-    private var closeButton: some View {
+    ///
+    /// Explicit `maxWidth: .infinity, alignment: .trailing` here, not just
+    /// an inner `Spacer()` — the enclosing ZStack's own alignment is `.top`
+    /// (top-*center*), so a child that doesn't span the full width centers
+    /// itself there regardless of its own internal alignment. Learned that
+    /// the hard way: an earlier version of this without the frame landed
+    /// dead center instead of at either edge.
+    private var topRightButtons: some View {
         VStack {
-            HStack {
+            HStack(spacing: 2) {
                 Spacer()
+                Button { controller.minimizeSticky() } label: {
+                    Text("–")
+                        .font(.custom("ABCStefanTrial-Simple", size: 16))
+                        .foregroundStyle(color.ink.opacity(0.3))
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
                 Button { controller.closeSticky() } label: {
                     Text("X")
                         .font(.custom("ABCStefanTrial-Simple", size: 16))
@@ -173,6 +206,7 @@ struct StickyRootView: View {
             }
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.top, 14)
         .padding(.trailing, 14)
         .opacity(hovering ? 1 : 0)
@@ -202,6 +236,7 @@ struct StickyRootView: View {
                 row(item)
             }
             toggleIfNeeded
+            addRowButton
         }
         // No `.animation(value: model.items)` here — the checkbox's own
         // `withAnimation` at the toggle call site is the single source of
@@ -227,6 +262,35 @@ struct StickyRootView: View {
                 controller.collapse(toRows: defaultCollapsedRows,
                                     rowHeight: rowHeightEstimate, chromeHeight: chromeHeightEstimate)
             }
+        }
+    }
+
+    /// Always-there "next row," so starting a new line never requires
+    /// clicking into an existing one first. Hidden when "N more" is already
+    /// showing — no room to invite yet another row on top of that.
+    @ViewBuilder
+    private var addRowButton: some View {
+        let hidden = model.orderedItems.count - visibleItems.count
+        if hidden == 0 {
+            Button {
+                let newID = model.addItem()
+                revealIfHidden()
+                focusedID = newID
+            } label: {
+                HStack(spacing: 19) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(color.ink.opacity(0.32))
+                        .frame(width: 24, height: 24)
+                    Text("Add item")
+                        .font(bodyFont(13))
+                        .foregroundStyle(color.ink.opacity(0.32))
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -264,6 +328,7 @@ struct StickyRootView: View {
                         .textFieldStyle(.plain)
                         .font(bodyFont(14))
                         .foregroundStyle(color.ink.opacity(0.8))
+                        .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
                         .lineLimit(1...12)
                         .focused($focusedID, equals: item.id)
                         .onChange(of: bindingValue(item)) { _, newValue in
@@ -271,6 +336,14 @@ struct StickyRootView: View {
                         }
                         .onKeyPress(.return) {
                             submit(item)
+                            return .handled
+                        }
+                        .onKeyPress(.upArrow) {
+                            moveFocus(from: item, by: -1)
+                            return .handled
+                        }
+                        .onKeyPress(.downArrow) {
+                            moveFocus(from: item, by: 1)
                             return .handled
                         }
                         .transition(.identity)
@@ -285,9 +358,7 @@ struct StickyRootView: View {
 
     private func checkbox(_ item: TodoItem) -> some View {
         Button {
-            // Linear, not eased — a constant-speed slide reads as "both rows
-            // moving together" rather than one darting ahead of the other.
-            withAnimation(.linear(duration: 0.8)) { model.toggle(item.id) }
+            toggleDone(item)
         } label: {
             ZStack {
                 if item.isDone {
@@ -308,8 +379,75 @@ struct StickyRootView: View {
                         .frame(width: 13, height: 13)
                 }
             }
-            .frame(width: 24, height: 24)      // generous, fully-tappable hit area
+            .frame(width: 24, height: 34)      // taller than the visual box — the whole row's click height, not just the glyph
             .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Toggling isDone swaps this row between an editable `TextField` and a
+    /// static strikethrough `Text` — if the row being checked off still has
+    /// keyboard focus, that swap yanks focus out from under the field
+    /// mid-animation, which is what made this feel broken. Moving focus to
+    /// a sensible neighbor *before* the toggle keeps the animation clean.
+    private func toggleDone(_ item: TodoItem) {
+        if !item.isDone, focusedID == item.id {
+            let active = model.items.filter { !$0.isDone }
+            let remaining = active.filter { $0.id != item.id }
+            if let idx = active.firstIndex(where: { $0.id == item.id }) {
+                focusedID = idx > 0 ? remaining[idx - 1].id : remaining.first?.id
+            }
+        }
+        withAnimation(.easeInOut(duration: 0.35)) {
+            model.toggle(item.id)
+        }
+    }
+
+    // MARK: - Color picker (free swatches + paid packs)
+
+    private var colorPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                ForEach(StickyColor.allCases.filter { $0.pack == nil }) { c in
+                    colorSwatchButton(c)
+                }
+            }
+            ForEach(ColorPack.allCases) { pack in
+                HStack(spacing: 10) {
+                    if packStore.isUnlocked(pack) {
+                        ForEach(pack.colors) { c in colorSwatchButton(c) }
+                    } else {
+                        Button { paywallPack = pack } label: {
+                            HStack(spacing: 6) {
+                                ForEach(pack.colors) { c in
+                                    Circle().fill(c.paper).frame(width: 14, height: 14)
+                                }
+                                Image(systemName: "lock.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(12)
+    }
+
+    private func colorSwatchButton(_ c: StickyColor) -> some View {
+        Button {
+            model.setColor(c)
+            showColors = false
+        } label: {
+            Circle()
+                .fill(c.paper)
+                .frame(width: 22, height: 22)
+                .overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 1))
+                .overlay(
+                    Circle().stroke(color.ink, lineWidth: c == model.color ? 2 : 0)
+                        .padding(-3)
+                )
         }
         .buttonStyle(.plain)
     }
@@ -322,25 +460,7 @@ struct StickyRootView: View {
             HStack(spacing: 18) {
                 Button { showColors.toggle() } label: { Image(systemName: "paintpalette") }
                     .popover(isPresented: $showColors, arrowEdge: .top) {
-                        HStack(spacing: 10) {
-                            ForEach(StickyColor.allCases) { c in
-                                Button {
-                                    model.setColor(c)
-                                    showColors = false
-                                } label: {
-                                    Circle()
-                                        .fill(c.paper)
-                                        .frame(width: 22, height: 22)
-                                        .overlay(Circle().stroke(.black.opacity(0.15), lineWidth: 1))
-                                        .overlay(
-                                            Circle().stroke(color.ink, lineWidth: c == model.color ? 2 : 0)
-                                                .padding(-3)
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(12)
+                        colorPicker
                     }
 
                 Button { showFonts.toggle() } label: {
@@ -392,7 +512,9 @@ struct StickyRootView: View {
 
     @ViewBuilder private var contextMenu: some View {
         Menu("Color") {
-            ForEach(StickyColor.allCases) { c in
+            // Owned colors only — locked pack colors need the paywall UI in
+            // the popover picker, not a bare menu item.
+            ForEach(StickyColor.allCases.filter { $0.pack == nil || packStore.isUnlocked($0.pack!) }) { c in
                 Button(c.displayName) { model.setColor(c) }
             }
         }
@@ -422,6 +544,18 @@ struct StickyRootView: View {
     private func revealIfHidden() {
         guard model.orderedItems.count > visibleRowCapacity else { return }
         controller.growBy(rows: 1, estimatedRowHeight: rowHeightEstimate)
+    }
+
+    /// Up/down arrow jumps focus to the adjacent row — same convention as
+    /// Reminders/Things checklists. Trades away moving the cursor between a
+    /// single item's own wrapped lines, but checklist rows are short enough
+    /// in practice that row-to-row navigation is the more useful default.
+    private func moveFocus(from item: TodoItem, by delta: Int) {
+        let ordered = model.orderedItems
+        guard let idx = ordered.firstIndex(where: { $0.id == item.id }) else { return }
+        let target = idx + delta
+        guard ordered.indices.contains(target) else { return }
+        focusedID = ordered[target].id
     }
 
     /// Backspace on an empty (or whitespace-only) row deletes it and focuses

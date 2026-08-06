@@ -9,6 +9,13 @@ enum StickyColor: String, CaseIterable, Codable, Identifiable {
     case orange     // #FE6926
     case green      // #17C862
 
+    // Candy Pack (paid) — hex values from Renee.
+    case candyLavender  // #ABCCF8
+    case candyCoral     // #FF5E58
+    case candyPink      // #FFB2D5
+    case candyYellow    // #FFE74E
+    case candyMint      // #94F48F
+
     var id: String { rawValue }
 
     var displayName: String {
@@ -18,6 +25,11 @@ enum StickyColor: String, CaseIterable, Codable, Identifiable {
         case .blue:   return "Blue"
         case .orange: return "Orange"
         case .green:  return "Green"
+        case .candyLavender: return "Lavender"
+        case .candyCoral:    return "Coral"
+        case .candyPink:     return "Bubblegum"
+        case .candyYellow:   return "Lemon"
+        case .candyMint:     return "Mint"
         }
     }
 
@@ -29,6 +41,21 @@ enum StickyColor: String, CaseIterable, Codable, Identifiable {
         case .blue:   return hex(0x72D6E9)
         case .orange: return hex(0xFE6926)
         case .green:  return hex(0x17C862)
+        case .candyLavender: return hex(0xABCCF8)
+        case .candyCoral:    return hex(0xFF5E58)
+        case .candyPink:     return hex(0xFFB2D5)
+        case .candyYellow:   return hex(0xFFE74E)
+        case .candyMint:     return hex(0x94F48F)
+        }
+    }
+
+    /// Which paid pack unlocks this color — `nil` for the free built-in five.
+    var pack: ColorPack? {
+        switch self {
+        case .candyLavender, .candyCoral, .candyPink, .candyYellow, .candyMint:
+            return .candy
+        default:
+            return nil
         }
     }
 

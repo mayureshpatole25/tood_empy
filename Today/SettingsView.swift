@@ -19,7 +19,9 @@ struct SettingsView: View {
     @State private var showColorPicker = false
     @State private var showFontPicker = false
     @State private var connectingCalendar = false
+    @State private var paywallPack: ColorPack?
     @Bindable var settings: AppSettings
+    private var packStore: ColorPackStore { ColorPackStore.shared }
 
     private let auth = GoogleAuthService.shared
 
@@ -89,6 +91,9 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 480)
+        .sheet(item: $paywallPack) { pack in
+            ColorPackPaywallView(pack: pack) { }
+        }
     }
 
     // MARK: - Color
@@ -105,9 +110,30 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showColorPicker, arrowEdge: .top) {
-            HStack(spacing: 10) {
-                swatchButton(nil)
-                ForEach(StickyColor.allCases) { c in swatchButton(c) }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    swatchButton(nil)
+                    ForEach(StickyColor.allCases.filter { $0.pack == nil }) { c in swatchButton(c) }
+                }
+                ForEach(ColorPack.allCases) { pack in
+                    HStack(spacing: 10) {
+                        if packStore.isUnlocked(pack) {
+                            ForEach(pack.colors) { c in swatchButton(c) }
+                        } else {
+                            Button { paywallPack = pack } label: {
+                                HStack(spacing: 6) {
+                                    ForEach(pack.colors) { c in
+                                        Circle().fill(c.paper).frame(width: 14, height: 14)
+                                    }
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
             .padding(12)
         }
@@ -130,7 +156,7 @@ struct SettingsView: View {
             if let c {
                 Circle().fill(c.paper)
             } else {
-                Circle().fill(AngularGradient(colors: StickyColor.allCases.map(\.paper), center: .center))
+                Circle().fill(AngularGradient(colors: StickyColor.allCases.filter { $0.pack == nil }.map(\.paper), center: .center))
             }
         }
         .frame(width: size, height: size)
