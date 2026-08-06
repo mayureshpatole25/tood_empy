@@ -11,33 +11,38 @@
   var scene = document.getElementById("scene");
   var rows = document.getElementById("stickyRows");
 
-  // A different wallpaper per visit: pick one at random on every load,
-  // set as early as possible (before anything else runs) so there's no
-  // visible swap once the page has painted.
-  var WALLPAPERS = [
-    "assets/wallpaper.jpg",
-    "assets/wallpapers/macOS3.jpg",
-    "assets/wallpapers/macOS4.jpg",
-    "assets/wallpapers/macOS5.jpg",
-    "assets/wallpapers/macOS14.jpg",
-    "assets/wallpapers/macOS15.jpg"
-  ];
+  // The default hero background for every visitor, set as early as
+  // possible (before anything else runs) so there's no visible swap once
+  // the page has painted.
+  var DEFAULT_WALLPAPER = "assets/wallpapers/frog.jpg";
   var sceneBg = document.querySelector(".scene-bg");
   if (sceneBg) {
-    var pick = WALLPAPERS[Math.floor(Math.random() * WALLPAPERS.length)];
-    sceneBg.style.backgroundImage = "url(\"" + pick + "\")";
+    sceneBg.style.backgroundImage = "url(\"" + DEFAULT_WALLPAPER + "\")";
   }
 
   // Real interactivity, matching the actual app: click a box to strike
   // a line through it, click text to edit it, press Enter at the end of
   // a line to open a new blank one right below (focused and ready to
   // type), press Backspace on an empty line to remove it.
-  function addRow(itemText, done, afterEl) {
+  var DOWNLOAD_URL = "https://github.com/reneezhang99/to-do-app/releases/download/v1.0.0/Tood.dmg";
+
+  function addRow(container, itemText, done, afterEl) {
     var row = document.createElement("div");
     row.className = "sticky-row" + (done ? " done" : "");
     var box = document.createElement("span");
     box.className = "sticky-box";
-    box.addEventListener("click", function (e) { e.stopPropagation(); row.classList.toggle("done"); });
+    box.addEventListener("click", function (e) {
+      e.stopPropagation();
+      row.classList.toggle("done");
+      if (row.classList.contains("done") && text.textContent.trim().toLowerCase() === "download tood") {
+        var a = document.createElement("a");
+        a.href = DOWNLOAD_URL;
+        a.download = "";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+    });
     var text = document.createElement("span");
     text.className = "sticky-text";
     text.contentEditable = "true";
@@ -48,9 +53,9 @@
     text.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        var newRow = addRow("", false, row);
+        var newRow = addRow(container, "", false, row);
         newRow.querySelector(".sticky-text").focus();
-      } else if (e.key === "Backspace" && text.textContent === "" && rows.children.length > 1) {
+      } else if (e.key === "Backspace" && text.textContent === "" && container.children.length > 1) {
         e.preventDefault();
         var prev = row.previousElementSibling || row.nextElementSibling;
         row.remove();
@@ -68,12 +73,199 @@
     });
     row.appendChild(box);
     row.appendChild(text);
-    if (afterEl && afterEl.nextSibling) rows.insertBefore(row, afterEl.nextSibling);
-    else rows.appendChild(row);
+    if (afterEl && afterEl.nextSibling) container.insertBefore(row, afterEl.nextSibling);
+    else container.appendChild(row);
     return row;
   }
 
-  ITEMS.forEach(function (item) { addRow(item.t, item.done, null); });
+  ITEMS.forEach(function (item) { addRow(rows, item.t, item.done, null); });
+
+  function addAddItemButton(card, container) {
+    var btn = document.createElement("button");
+    btn.className = "sticky-add-item";
+    btn.type = "button";
+    btn.innerHTML = '<span class="plus-glyph">+</span> Add item';
+    btn.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var newRow = addRow(container, "", false, container.lastElementChild);
+      newRow.querySelector(".sticky-text").focus();
+    });
+    card.appendChild(btn);
+  }
+  addAddItemButton(document.getElementById("sticky"), rows);
+
+  (function () {
+    var existingTitle = document.querySelector("#sticky .sticky-title");
+    existingTitle.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    existingTitle.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+    existingTitle.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); existingTitle.blur(); }
+    });
+  })();
+
+  // ---------- color picker, "+ Add item", new-sticky, close ----------
+  // Hex values come straight from the real macOS app's source
+  // (StickyColor.swift) so the web demo matches what you actually get.
+  var FREE_COLORS = ["#FE9591", "#F8E6CF", "#72D6E9", "#FE6926", "#17C862"];
+  var CYCLE_COLORS = ["#72D6E9", "#17C862", "#FE9591", "#FE6926", "#F8E6CF"]; // blue, green, pink, orange, cream
+  var cycleIndex = 0;
+  var newStickyCount = 0;
+
+  function nextZIndex() {
+    var maxZ = 8;
+    document.querySelectorAll(".card-shared").forEach(function (s) {
+      maxZ = Math.max(maxZ, parseInt(s.style.zIndex || 8, 10));
+    });
+    return maxZ + 1;
+  }
+
+  function closeAllPopovers() {
+    document.querySelectorAll(".card-shared.popover-open").forEach(function (c) {
+      c.classList.remove("popover-open");
+    });
+  }
+  document.addEventListener("pointerdown", function (e) {
+    if (!e.target.closest(".sticky-toolbar")) closeAllPopovers();
+  });
+
+  function applyColor(card, hex) {
+    card.style.background = hex;
+    card.querySelectorAll(".color-swatch").forEach(function (sw) {
+      sw.classList.toggle("active", sw.dataset.hex.toLowerCase() === hex.toLowerCase());
+    });
+  }
+
+  function makeSwatch(hex) {
+    var b = document.createElement("button");
+    b.className = "color-swatch";
+    b.type = "button";
+    b.style.background = hex;
+    b.dataset.hex = hex;
+    b.setAttribute("aria-label", "Set color " + hex);
+    return b;
+  }
+
+  // Injects the close button, hover toolbar (color picker + new sticky)
+  // onto any card — the two on-page stickies at load, and every one
+  // created afterward via the "+" button.
+  function wireCardInteractive(card) {
+    var close = document.createElement("button");
+    close.className = "sticky-close";
+    close.type = "button";
+    close.setAttribute("aria-label", "Close");
+    close.innerHTML = "&times;";
+    close.addEventListener("click", function (e) {
+      e.stopPropagation();
+      card.remove();
+      updateSceneHeight();
+    });
+    card.appendChild(close);
+
+    var toolbar = document.createElement("div");
+    toolbar.className = "sticky-toolbar";
+
+    var paletteBtn = document.createElement("button");
+    paletteBtn.className = "toolbar-btn";
+    paletteBtn.type = "button";
+    paletteBtn.setAttribute("aria-label", "Change color");
+    paletteBtn.innerHTML = '<span class="toolbar-dots"><span></span><span></span><span></span><span></span></span>';
+    paletteBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      var isOpen = card.classList.contains("popover-open");
+      closeAllPopovers();
+      card.classList.toggle("popover-open", !isOpen);
+    });
+
+    var addBtn = document.createElement("button");
+    addBtn.className = "toolbar-btn";
+    addBtn.type = "button";
+    addBtn.setAttribute("aria-label", "New sticky");
+    addBtn.textContent = "+";
+    addBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      createSticky();
+    });
+
+    var popover = document.createElement("div");
+    popover.className = "color-popover";
+
+    var freeRow = document.createElement("div");
+    freeRow.className = "color-popover-row";
+    FREE_COLORS.forEach(function (hex) {
+      var sw = makeSwatch(hex);
+      sw.addEventListener("click", function (e) {
+        e.stopPropagation();
+        applyColor(card, hex);
+        card.classList.remove("popover-open");
+      });
+      freeRow.appendChild(sw);
+    });
+
+    popover.appendChild(freeRow);
+    toolbar.appendChild(paletteBtn);
+    toolbar.appendChild(addBtn);
+    toolbar.appendChild(popover);
+    card.appendChild(toolbar);
+
+    // Mark the swatch matching this card's current paper as active, if any.
+    var currentHex = (card.style.background || "").trim();
+    if (currentHex) {
+      card.querySelectorAll(".color-swatch").forEach(function (sw) {
+        sw.classList.toggle("active", sw.dataset.hex.toLowerCase() === currentHex.toLowerCase());
+      });
+    }
+  }
+
+  function createSticky() {
+    newStickyCount++;
+    var hex = CYCLE_COLORS[cycleIndex % CYCLE_COLORS.length];
+    cycleIndex++;
+
+    var card = document.createElement("div");
+    card.className = "sticky card-shared";
+    card.style.background = hex;
+
+    var head = document.createElement("div");
+    head.className = "sticky-head";
+    var title = document.createElement("div");
+    title.className = "sticky-title";
+    title.contentEditable = "true";
+    title.spellcheck = false;
+    title.textContent = "To Do";
+    title.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+    title.addEventListener("mousedown", function (e) { e.stopPropagation(); });
+    title.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); title.blur(); }
+    });
+    var date = document.createElement("div");
+    date.className = "sticky-date";
+    date.textContent = document.getElementById("sdate").textContent;
+    head.appendChild(title);
+    head.appendChild(date);
+
+    var rowsContainer = document.createElement("div");
+    rowsContainer.className = "sticky-rows";
+
+    card.appendChild(head);
+    card.appendChild(rowsContainer);
+    document.getElementById("cardsRow").appendChild(card);
+
+    var newRow = addRow(rowsContainer, "", false, null);
+    addAddItemButton(card, rowsContainer);
+
+    var offset = 26 * (newStickyCount % 6);
+    card.style.zIndex = nextZIndex();
+    makeDraggable(card, 34 + offset, 40 + offset);
+    wireCardInteractive(card);
+    applyColor(card, hex);
+    updateSceneHeight();
+
+    newRow.querySelector(".sticky-text").focus();
+  }
+
+  wireCardInteractive(document.getElementById("headlineCard"));
+  wireCardInteractive(document.getElementById("sticky"));
 
   // Both cards start laid out side by side via flex (so sizing/gap stay
   // responsive), then get measured once and switched to absolute so
@@ -96,7 +288,7 @@
     // then converts to cards-row-relative only at the very end, right
     // before writing el.style.left/top.
     el.addEventListener("pointerdown", function (e) {
-      if (e.target.classList.contains("sticky-text") || e.target.classList.contains("sticky-box")) return;
+      if (e.target.closest(".sticky-text, .sticky-box, .sticky-title, .sticky-toolbar, .color-popover, .sticky-close, .sticky-add-item")) return;
       pointerId = e.pointerId;
       dragging = false;
       var sr = scene.getBoundingClientRect();
@@ -228,22 +420,21 @@
 
 (function () {
   "use strict";
-  var SEEN_KEY = "toodWhatsNewCandyV1";
+  var CANDY_CHECKOUT_URL = "https://buy.polar.sh/polar_cl_sK0AiofXosBUkvEPktaB0wxzgjsrPHHPRghJi3ZyImq";
   var overlay = document.getElementById("whatsnewOverlay");
   if (!overlay) return;
 
-  var alreadySeen;
-  try { alreadySeen = localStorage.getItem(SEEN_KEY); } catch (e) { alreadySeen = null; }
-  if (alreadySeen) { overlay.parentNode.removeChild(overlay); return; }
+  function dismiss() { overlay.classList.remove("show"); }
 
-  function dismiss() {
-    overlay.classList.remove("show");
-    try { localStorage.setItem(SEEN_KEY, "1"); } catch (e) {}
-  }
+  setTimeout(function () { overlay.classList.add("show"); }, 1000);
 
-  setTimeout(function () { overlay.classList.add("show"); }, 900);
-
-  document.getElementById("whatsnewClose").addEventListener("click", dismiss);
+  document.getElementById("whatsnewText").addEventListener("click", function () {
+    window.open(CANDY_CHECKOUT_URL, "_blank", "noopener");
+  });
+  document.getElementById("whatsnewClose").addEventListener("click", function (e) {
+    e.stopPropagation();
+    dismiss();
+  });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && overlay.classList.contains("show")) dismiss();
   });

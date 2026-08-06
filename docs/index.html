@@ -44,7 +44,7 @@
     </a>
   </div>
 
-  <div class="cards-row">
+  <div class="cards-row" id="cardsRow">
     <div class="headline-card card-shared" id="headlineCard">
       <div class="headline-lines">
         <div>Things</div><div>To</div><div>Do</div><div>Today</div>
@@ -53,10 +53,10 @@
     </div>
     <div class="sticky card-shared" id="sticky">
       <div class="sticky-head">
-        <div class="sticky-title">To Do</div>
+        <div class="sticky-title" contenteditable="true" spellcheck="false">To Do</div>
         <div class="sticky-date" id="sdate"></div>
       </div>
-      <div id="stickyRows"></div>
+      <div class="sticky-rows" id="stickyRows"></div>
     </div>
   </div>
 
@@ -95,15 +95,16 @@
 
 <div class="whatsnew-toast" id="whatsnewOverlay" role="status" aria-label="What's new">
   <img class="whatsnew-icon" src="assets/toodicon.png?v=2" alt="">
-  <div class="whatsnew-text">
-    <div class="whatsnew-title">New: Candy color pack</div>
-    <p class="whatsnew-body">Sticky notes in five pastel colors. More packs added weekly.</p>
+  <div class="whatsnew-text" id="whatsnewText">
+    <div class="whatsnew-label">What's new</div>
+    <div class="whatsnew-title">Buy the Candy color pack</div>
+    <p class="whatsnew-body">Five pastel colors for your stickies. More packs added weekly.</p>
     <div class="whatsnew-swatches" aria-hidden="true">
-      <span style="background:#ff9fc0"></span>
-      <span style="background:#ffd76a"></span>
-      <span style="background:#8fe8c8"></span>
-      <span style="background:#c3a6f7"></span>
-      <span style="background:#8dcdff"></span>
+      <span style="background:#ABCCF8"></span>
+      <span style="background:#FF5E58"></span>
+      <span style="background:#FFB2D5"></span>
+      <span style="background:#FFE74E"></span>
+      <span style="background:#94F48F"></span>
     </div>
   </div>
   <button class="whatsnew-close" id="whatsnewClose" aria-label="Dismiss">&times;</button>
