@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Tood</title>
+<meta name="description" content="Privacy policy for Tood, a native macOS to-do app.">
+<link rel="icon" href="assets/toodicon.png?v=2">
+<style>
+  :root {
+    --ink: #1c1d1a;
+    --ink-soft: rgba(28,29,26,.7);
+    --accent: #17c862;
+    --border: rgba(28,29,26,.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #fbfaf6;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 64px 24px 96px; }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    margin-bottom: 28px;
+  }
+  .back:hover { color: var(--ink); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  header img { width: 36px; height: 36px; border-radius: 10px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+  .updated { font-size: 13px; color: var(--ink-soft); margin: 6px 0 40px; }
+  h2 { font-size: 17px; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  p, li { font-size: 15px; color: var(--ink-soft); }
+  ul { padding-left: 20px; margin: 10px 0; }
+  li { margin-bottom: 6px; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 20px 0;
+    background: #fff;
+  }
+  footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">&larr; Back to Tood</a>
+  <header>
+    <img src="assets/toodicon.png?v=2" alt="">
+    <h1>Privacy Policy</h1>
+  </header>
+  <p class="updated">Last updated: August 6, 2026</p>
+
+  <p>Tood ("Tood," "we," "our," or "us") is a native macOS app for sticky-note to‑dos, made by Renee Zhang. This policy explains what data Tood accesses, how it's used, and your choices — for both the Tood macOS app and this website (toodapp.com).</p>
+
+  <div class="card">
+    <strong>The short version:</strong> Tood is a local‑first app. Your to‑dos, journal entries, and settings live on your Mac. We don't run our own servers that collect or store your personal data, we don't sell data, and we don't use analytics or advertising trackers.
+  </div>
+
+  <h2>Data Tood stores on your device</h2>
+  <p>The following stays on your Mac (in local app storage), and is never transmitted to us:</p>
+  <ul>
+    <li>Sticky note and to-do content — titles, checklist items, colors, and positions</li>
+    <li>Journal entries you write, including any optional weather or location label you choose to attach</li>
+    <li>App preferences — default sticky color, launch-at-login, keyboard shortcuts, and similar settings</li>
+  </ul>
+
+  <h2>Google Calendar (optional)</h2>
+  <p>If you choose to connect Google Calendar, Tood requests <strong>read-only</strong> access (<code>calendar.readonly</code>) to display your upcoming events alongside your to‑dos. Specifically:</p>
+  <ul>
+    <li>Calendar data is read directly from Google's servers to your device and used only to display your agenda inside the app — it is never sent to any server we operate.</li>
+    <li>The OAuth token Google issues is stored in your Mac's Keychain, the secure, encrypted storage macOS provides for credentials — never written to disk in plain text.</li>
+    <li>You can disconnect Google Calendar at any time from Tood's settings, which removes the stored token from your Keychain.</li>
+  </ul>
+
+  <h2>Location (optional)</h2>
+  <p>If you turn on location stamps for journal entries, Tood asks macOS for a one-time, approximate location (when-in-use permission) and converts it to a rough label (e.g. a city name). This happens entirely on-device via Apple's location services; Tood does not transmit your location anywhere or store precise coordinates. If permission is denied, journaling still works — entries just save without a location label.</p>
+
+  <h2>Purchases (color packs)</h2>
+  <p>Optional color packs (like Candy) are sold as one-time purchases processed by <a href="https://polar.sh" target="_blank" rel="noopener">Polar</a>, a third-party payment provider. Tood never sees or stores your payment card details — Polar handles checkout and issues a license key, which Tood validates to unlock the pack. See <a href="https://polar.sh/legal/privacy" target="_blank" rel="noopener">Polar's privacy policy</a> for how they handle payment data.</p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No analytics or usage tracking SDKs</li>
+    <li>No crash reporting services</li>
+    <li>No advertising or ad identifiers</li>
+    <li>No selling or sharing of personal data with third parties for marketing</li>
+  </ul>
+
+  <h2>This website</h2>
+  <p>toodapp.com is a static marketing site. It doesn't use cookies or analytics. Standard web server logs (such as IP address and browser type) are collected automatically by our hosting providers (GitHub Pages and Vercel) for security and reliability, as is typical for any website — we don't access these logs for tracking purposes.</p>
+
+  <h2>Data retention &amp; deletion</h2>
+  <p>Since your to-dos, journal entries, and settings live locally on your Mac, you're always in control: deleting the app (or its data via Settings) removes them. Disconnecting Google Calendar removes the stored token from your Keychain immediately.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, we'll update the date at the top of this page. Material changes will also be noted in the app's release notes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy or your data? Email <a href="mailto:reneezhang99@gmail.com">reneezhang99@gmail.com</a>.</p>
+
+  <footer>Tood — made by <a href="https://renee.wiki/" target="_blank" rel="noopener">Renee</a></footer>
+</div>
+</body>
+</html>
