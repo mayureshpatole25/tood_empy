@@ -95,7 +95,7 @@ struct OnboardingView: View {
 
     private var fontStep: some View {
         VStack(spacing: 20) {
-            stepHeading("Pick a default font", "For your checklist text — the big title always stays Helvetica Neue.")
+            stepHeading("Pick a default font", "For your checklist text. The big title always stays Helvetica Neue.")
             HStack(spacing: 14) {
                 ForEach(StickyFont.allCases) { f in
                     Button { font = f } label: {
@@ -124,7 +124,7 @@ struct OnboardingView: View {
     /// they type, rather than a fake mockup they'll never see again.
     private var stickyStep: some View {
         VStack(spacing: 20) {
-            stepHeading("Add your first to-do", "It's already sitting on your desktop — try typing something.")
+            stepHeading("Add your first to-do", "It's already sitting on your desktop, try typing something.")
             if let sticky = previewSticky {
                 previewStickyCard(sticky)
             }
@@ -180,7 +180,7 @@ struct OnboardingView: View {
 
     private var shortcutStep: some View {
         VStack(spacing: 20) {
-            stepHeading("Set your shortcuts", "Global — these work from anywhere, even while another app is active.")
+            stepHeading("Set your shortcuts", "Global: these work from anywhere, even while another app is active.")
             VStack(spacing: 12) {
                 HStack {
                     Text("Show Active Sticky").frame(width: 160, alignment: .leading)
@@ -216,7 +216,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(connectingCalendar)
-                Text("Optional — you can always connect later from Settings.")
+                Text("Optional. You can always connect later from Settings.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

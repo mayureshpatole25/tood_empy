@@ -9,6 +9,10 @@ struct ArchivedItem: Codable, Identifiable {
     var stickyTitle: String
     var completedAt: Date?
     var archivedOn: Date
+    /// The sticky's color at archive time, for the Home insight card's
+    /// colored task dots. Optional so older archive files without this
+    /// field still decode fine — those just show as `nil`.
+    var stickyColor: StickyColor?
 }
 
 /// Append-only JSON archive alongside the sticky store.

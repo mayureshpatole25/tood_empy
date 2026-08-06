@@ -16,7 +16,7 @@ enum PolarLicenseService {
         var errorDescription: String? {
             switch self {
             case .invalidKey: return "That license key doesn't look right. Double-check and try again."
-            case .network: return "Couldn't reach the store — check your connection and try again."
+            case .network: return "Couldn't reach the store. Check your connection and try again."
             }
         }
     }

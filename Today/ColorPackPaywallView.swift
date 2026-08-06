@@ -31,7 +31,7 @@ struct ColorPackPaywallView: View {
 
             Text(pack.displayName)
                 .font(.system(size: 16, weight: .semibold))
-            Text("Unlock 5 new sticky colors for \(pack.priceDisplay), one-time — no subscription.")
+            Text("Unlock 5 new sticky colors for \(pack.priceDisplay), one-time, no subscription.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
 

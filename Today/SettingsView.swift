@@ -53,7 +53,7 @@ struct SettingsView: View {
                     }
                     .disabled(connectingCalendar)
                 }
-                Text("Only reads today's events to show on your Home screen — nothing is written back to your calendar.")
+                Text("Only reads today's events to show on your Home screen. Nothing is written back to your calendar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

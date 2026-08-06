@@ -141,6 +141,41 @@ final class StickyManager {
         return liveToday + archivedToday
     }
 
+    /// Today's completed items with their sticky's color, for the Home
+    /// insight card — same "live + archived" merge as `tasksCompletedToday`,
+    /// just returning the items themselves instead of a count.
+    func completedTodayDisplay() -> [CompletedTaskDisplay] {
+        let cal = Calendar.current
+        var result: [CompletedTaskDisplay] = []
+        for id in order {
+            guard let model = controllers[id]?.model else { continue }
+            for item in model.items where item.isDone && !item.text.isEmpty {
+                guard let completedAt = item.completedAt, cal.isDateInToday(completedAt) else { continue }
+                result.append(CompletedTaskDisplay(id: item.id, text: item.text, color: model.color, completedAt: completedAt))
+            }
+        }
+        for archived in archive.load() {
+            guard let completedAt = archived.completedAt, cal.isDateInToday(completedAt) else { continue }
+            result.append(CompletedTaskDisplay(id: archived.id, text: archived.text, color: archived.stickyColor ?? .pink, completedAt: completedAt))
+        }
+        return result.sorted { $0.completedAt < $1.completedAt }
+    }
+
+    /// A handful of currently open (unchecked, non-empty) items across every
+    /// sticky — used by the insight card's zero-state, so a slow day still
+    /// has something concrete to show instead of an empty list.
+    func openItemsDisplay(limit: Int) -> [OpenTaskDisplay] {
+        var result: [OpenTaskDisplay] = []
+        for id in order {
+            guard let model = controllers[id]?.model else { continue }
+            for item in model.items where !item.isDone && !item.text.isEmpty {
+                result.append(OpenTaskDisplay(id: item.id, text: item.text))
+                if result.count >= limit { return result }
+            }
+        }
+        return result
+    }
+
     // MARK: - Persistence (debounced)
 
     func scheduleSave() {
@@ -170,7 +205,8 @@ final class StickyManager {
                 archived.append(ArchivedItem(
                     id: item.id, text: item.text,
                     stickyID: model.id, stickyTitle: model.title,
-                    completedAt: item.completedAt, archivedOn: now))
+                    completedAt: item.completedAt, archivedOn: now,
+                    stickyColor: model.color))
             }
             model.items.removeAll { $0.isDone }
             model.day = now

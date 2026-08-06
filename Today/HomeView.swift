@@ -23,6 +23,7 @@ struct HomeView: View {
     let journal: JournalStore
 
     @State private var showingJournal = false
+    @State private var journalInitialDay: Date?
     @State private var locationLabel: String?
     @State private var journalHover = false
     @State private var addCardHover = false
@@ -32,7 +33,7 @@ struct HomeView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // These two paint the full window, including behind the
-            // (hidden) title bar — without ignoresSafeArea they stop short
+            // (hidden) title bar. Without ignoresSafeArea they stop short
             // of that region and the window's own white backing shows
             // through as a strip across the top.
             desk.ignoresSafeArea()
@@ -46,10 +47,18 @@ struct HomeView: View {
             .padding(.horizontal, 44)
             .padding(.top, 30)
             .padding(.bottom, 44)
+
+            // Floats independently of the fan/pill column below so it
+            // always stays put in the corner regardless of how tall the
+            // fan or the focus pill's row end up being.
+            journalButton
+                .padding(.horizontal, 44)
+                .padding(.bottom, 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         }
         .frame(minWidth: 820, minHeight: 600)
         .sheet(isPresented: $showingJournal) {
-            JournalZenView(journal: journal, onDone: { showingJournal = false })
+            JournalZenView(journal: journal, initialDay: journalInitialDay, onDone: { showingJournal = false })
         }
         .onAppear {
             LocationStamper.shared.requestLabel { locationLabel = $0 }
@@ -66,6 +75,11 @@ struct HomeView: View {
                 Text(dateLine)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
+                InsightStatView(manager: manager, journal: journal) { day in
+                    journalInitialDay = day
+                    showingJournal = true
+                }
+                .padding(.top, 8)
             }
             Spacer()
             AgendaTimeline()
@@ -93,12 +107,14 @@ struct HomeView: View {
         return full.split(separator: " ").first.map(String.init) ?? full
     }
 
-    // MARK: - Bottom: stickies (left, fills remaining width) + journal (right, fixed)
+    // MARK: - Bottom: stickies, then the focus pill centered underneath
+    // (the journal button floats independently, see `body`)
 
     private var bottomRow: some View {
-        HStack(alignment: .bottom, spacing: 20) {
+        VStack(spacing: 14) {
             stickiesFan
-            journalButton
+            FocusSoundControl()
+                .frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
@@ -251,7 +267,7 @@ struct HomeView: View {
                 .opacity(journalHover ? 1 : 0)
                 .offset(x: journalHover ? 0 : 4)
 
-            Button { showingJournal = true } label: {
+            Button { journalInitialDay = nil; showingJournal = true } label: {
                 Text("✎")
                     .font(.custom("ABCStefanTrial-Simple", size: 20))
                     .foregroundStyle(desk)
