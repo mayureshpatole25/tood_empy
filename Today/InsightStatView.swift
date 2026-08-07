@@ -110,14 +110,6 @@ struct InsightStatView: View {
                 } else {
                     dailySections(snapshot)
                 }
-
-                if !AppSettings.shared.gitHubUsername.isEmpty {
-                    GitHubActivityStrip(username: AppSettings.shared.gitHubUsername)
-                        .padding(.top, 16)
-                        .overlay(alignment: .top) {
-                            Rectangle().fill(Color(hex: 0xEEEBE3)).frame(height: 1)
-                        }
-                }
             }
             .padding(20)
         }

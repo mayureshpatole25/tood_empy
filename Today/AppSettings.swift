@@ -56,14 +56,6 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(titleSize.rawValue, forKey: Keys.titleSize) }
     }
 
-    /// Public GitHub username for the Home insight card's activity strip
-    /// (see `GitHubContributionsService`) — empty means that section stays
-    /// hidden. No token/OAuth needed, it reads the same public contribution
-    /// calendar github.com shows a signed-out visitor.
-    var gitHubUsername: String {
-        didSet { UserDefaults.standard.set(gitHubUsername, forKey: Keys.gitHubUsername) }
-    }
-
     private init() {
         let d = UserDefaults.standard
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
@@ -74,7 +66,6 @@ final class AppSettings {
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
         titleSize = d.string(forKey: Keys.titleSize).flatMap(StickyTitleSize.init(rawValue:)) ?? .large
-        gitHubUsername = d.string(forKey: Keys.gitHubUsername) ?? ""
     }
 
     private enum Keys {
@@ -86,6 +77,5 @@ final class AppSettings {
         static let journalLocation = "today.journalLocationEnabled"
         static let userName = "today.userName"
         static let titleSize = "today.titleSize"
-        static let gitHubUsername = "today.gitHubUsername"
     }
 }

@@ -58,13 +58,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Home") {
-                TextField("GitHub Username", text: $settings.gitHubUsername, prompt: Text("optional"))
-                Text("Shows a small activity strip on the insight card, colored with your default sticky color. Reads your public contribution graph only, no sign-in needed.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
             Section("New Sticky Defaults") {
                 LabeledContent("Color") { colorButton }
                 LabeledContent("Font") { fontButton }
