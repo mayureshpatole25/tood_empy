@@ -57,11 +57,14 @@ struct IntroFallView: View {
 
             Spacer(minLength: 0)
 
-            Text("Made with care in Sydney and California.")
-                .font(StickyFont.menlo.body(12))
-                .foregroundStyle(.white.opacity(0.55))
-
-            HStack {
+            // One row, not a stacked text-then-button — the caption and
+            // the arrow read as a single baseline this way instead of the
+            // arrow sitting a full row below (and visually low against)
+            // the text above it.
+            HStack(alignment: .center) {
+                Text("Made with care in Sydney and California.")
+                    .font(StickyFont.menlo.body(12))
+                    .foregroundStyle(.white.opacity(0.55))
                 Spacer()
                 Button(action: onContinue) {
                     Image(systemName: "arrow.right")
@@ -73,7 +76,55 @@ struct IntroFallView: View {
         }
         .padding(28)
         .frame(width: 340, height: 460, alignment: .topLeading)
-        .background(cardColor.paper, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .background(
+            // The grid sits behind the text (as part of the background,
+            // not an overlay drawn on top of it) so it reads as texture
+            // on the paper rather than something laid over the words.
+            ZStack {
+                cardColor.paper
+                GridPatternOverlay()
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        )
         .shadow(color: .black.opacity(0.25), radius: 28, y: 18)
+    }
+}
+
+/// A faint white grid texture for the welcome sticky — same "barely
+/// there" convention as `PaperDotsBackground`, just a grid instead of
+/// dots and white instead of ink, since this sits on the green paper
+/// rather than the cream desk.
+private struct GridPatternOverlay: View {
+    var spacing: CGFloat = 20
+    var lineWidth: CGFloat = 0.75
+    var color: Color = .white
+
+    var body: some View {
+        Canvas { context, size in
+            var x: CGFloat = 0
+            while x <= size.width {
+                context.stroke(
+                    Path { path in
+                        path.move(to: CGPoint(x: x, y: 0))
+                        path.addLine(to: CGPoint(x: x, y: size.height))
+                    },
+                    with: .color(color), lineWidth: lineWidth
+                )
+                x += spacing
+            }
+            var y: CGFloat = 0
+            while y <= size.height {
+                context.stroke(
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: y))
+                        path.addLine(to: CGPoint(x: size.width, y: y))
+                    },
+                    with: .color(color), lineWidth: lineWidth
+                )
+                y += spacing
+            }
+        }
+        .opacity(0.25)
+        .allowsHitTesting(false)
     }
 }
