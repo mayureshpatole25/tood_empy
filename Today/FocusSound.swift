@@ -11,7 +11,7 @@ enum FocusSound: String, CaseIterable, Identifiable {
     case ocean
     case campfire
     case wind
-    case whiteNoise
+    case brownNoise
 
     var id: String { rawValue }
 
@@ -22,7 +22,7 @@ enum FocusSound: String, CaseIterable, Identifiable {
         case .ocean: return "Ocean Waves"
         case .campfire: return "Campfire"
         case .wind: return "Wind"
-        case .whiteNoise: return "White Noise"
+        case .brownNoise: return "Brown Noise"
         }
     }
 
@@ -33,7 +33,7 @@ enum FocusSound: String, CaseIterable, Identifiable {
         case .ocean: return "water.waves"
         case .campfire: return "flame"
         case .wind: return "wind"
-        case .whiteNoise: return "waveform"
+        case .brownNoise: return "waveform"
         }
     }
 
@@ -44,7 +44,7 @@ enum FocusSound: String, CaseIterable, Identifiable {
         case .ocean: return OceanGenerator(sampleRate: sampleRate)
         case .campfire: return CampfireGenerator(sampleRate: sampleRate)
         case .wind: return WindGenerator(sampleRate: sampleRate)
-        case .whiteNoise: return WhiteNoiseGenerator()
+        case .brownNoise: return BrownNoiseGenerator()
         }
     }
 }
@@ -56,9 +56,15 @@ protocol NoiseGenerator {
     mutating func next() -> Float
 }
 
-struct WhiteNoiseGenerator: NoiseGenerator {
+/// A single leaky integrator over white noise: deep and rumbly, the
+/// "brown"/"red" noise popular for masking and focus.
+struct BrownNoiseGenerator: NoiseGenerator {
+    private var last: Float = 0
+
     mutating func next() -> Float {
-        Float.random(in: -1...1) * 0.28
+        let white = Float.random(in: -1...1)
+        last = (last + 0.02 * white) / 1.02
+        return last * 1.8
     }
 }
 

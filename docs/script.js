@@ -24,7 +24,7 @@
   // a line through it, click text to edit it, press Enter at the end of
   // a line to open a new blank one right below (focused and ready to
   // type), press Backspace on an empty line to remove it.
-  var DOWNLOAD_URL = "https://github.com/reneezhang99/to-do-app/releases/download/v1.0.0/Tood.dmg";
+  var DOWNLOAD_URL = "/api/download";
 
   function addRow(container, itemText, done, afterEl) {
     var row = document.createElement("div");

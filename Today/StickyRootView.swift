@@ -393,15 +393,14 @@ struct StickyRootView: View {
     /// Toggling isDone swaps this row between an editable `TextField` and a
     /// static strikethrough `Text` — if the row being checked off still has
     /// keyboard focus, that swap yanks focus out from under the field
-    /// mid-animation, which is what made this feel broken. Moving focus to
-    /// a sensible neighbor *before* the toggle keeps the animation clean.
+    /// mid-animation, which is what made this feel broken. Clearing focus
+    /// *before* the toggle keeps the animation clean. (This used to move
+    /// focus to a neighboring row instead of clearing it, but that planted
+    /// a visible text cursor/focus ring on a row you never clicked, reading
+    /// as a stray highlight on the line above.)
     private func toggleDone(_ item: TodoItem) {
         if !item.isDone, focusedID == item.id {
-            let active = model.items.filter { !$0.isDone }
-            let remaining = active.filter { $0.id != item.id }
-            if let idx = active.firstIndex(where: { $0.id == item.id }) {
-                focusedID = idx > 0 ? remaining[idx - 1].id : remaining.first?.id
-            }
+            focusedID = nil
         }
         withAnimation(.easeInOut(duration: 0.35)) {
             model.toggle(item.id)
