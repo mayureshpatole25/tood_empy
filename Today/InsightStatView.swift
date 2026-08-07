@@ -45,9 +45,17 @@ struct InsightStatView: View {
             if expanded { markOpenedToday() }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 7) {
-                Text("\(snapshot?.statNumber ?? 0)")
-                    .font(.custom("HelveticaNeue-Medium", size: 22))
-                    .foregroundStyle(ink)
+                HStack(alignment: .top, spacing: 2) {
+                    Text("\(snapshot?.statNumber ?? 0)")
+                        .font(.custom("HelveticaNeue-Medium", size: 22))
+                        .foregroundStyle(ink)
+                    if hasUnseenToday {
+                        Circle()
+                            .fill(Color(hex: 0x17C862))
+                            .frame(width: 5, height: 5)
+                            .padding(.top, 3)
+                    }
+                }
                 Text(snapshot?.statLabel ?? "done today")
                     .font(.system(size: 11.5))
                     .foregroundStyle(mutedInk)
@@ -59,15 +67,6 @@ struct InsightStatView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.black.opacity(hovering ? 0.05 : 0))
             )
-            .overlay(alignment: .topTrailing) {
-                if hasUnseenToday {
-                    Circle()
-                        .fill(Color(hex: 0x20211E))
-                        .frame(width: 7, height: 7)
-                        .overlay(Circle().stroke(Color(hex: 0xFBF8F1), lineWidth: 2))
-                        .offset(x: 3, y: -3)
-                }
-            }
         }
         .buttonStyle(.plain)
         .offset(x: -6)

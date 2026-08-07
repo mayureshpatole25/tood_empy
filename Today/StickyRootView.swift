@@ -21,7 +21,12 @@ struct StickyRootView: View {
     /// Estimates for how many rows currently fit — not pixel-precise (rows
     /// can wrap), but `StickyController.recheckContentSize()` snaps the
     /// window to the exact fit right after, so small errors self-correct.
-    private let rowHeightEstimate: CGFloat = 31
+    /// Matches the checkbox's 34pt-tall click target (see `checkbox(_:)`)
+    /// plus the row's 6+6 vertical padding and 1pt divider — stale here
+    /// after that target was made taller was exactly what caused a visible
+    /// double-snap on "Show less"/"N more" for longer lists, since every
+    /// row's error compounded across the whole list.
+    private let rowHeightEstimate: CGFloat = 47
     private let chromeHeightEstimate: CGFloat = 232 // title block + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6

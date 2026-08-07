@@ -19,43 +19,47 @@ struct FocusSoundControl: View {
     private let accent = Color(hex: 0x3AE28C)
 
     var body: some View {
-        Button {
+        HStack(spacing: 9) {
             if player.isPlaying {
-                player.stop()
+                FocusWaveformView(color: accent)
+                    .frame(width: 18, height: 12)
             } else {
-                showingPicker.toggle()
+                Image(systemName: "headphones")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(quietText.opacity(hovering ? 0.95 : 0.7))
             }
-        } label: {
-            HStack(spacing: 9) {
-                if player.isPlaying {
-                    FocusWaveformView(color: accent)
-                        .frame(width: 18, height: 12)
-                } else {
-                    Image(systemName: "headphones")
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(quietText.opacity(hovering ? 0.95 : 0.7))
-                }
 
-                Text(player.currentSound?.displayName ?? "Focus sound")
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(player.isPlaying ? cream : quietText.opacity(hovering ? 0.95 : 0.7))
+            Text(player.currentSound?.displayName ?? "Focus sound")
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(player.isPlaying ? cream : quietText.opacity(hovering ? 0.95 : 0.7))
 
-                if player.isPlaying {
+            // A real, separate button — tapping it (and only it) stops
+            // playback. Tapping anywhere else on the pill, playing or not,
+            // reopens the picker so you can switch sounds without having
+            // to stop first.
+            if player.isPlaying {
+                Button {
+                    player.stop()
+                } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(cream.opacity(0.45))
+                        .foregroundStyle(cream.opacity(0.55))
+                        .padding(4)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, player.isPlaying ? 14 : 12)
-            .background(
-                Capsule().fill(player.isPlaying ? darkBg : Color.black.opacity(hovering ? 0.1 : 0.06))
-            )
-            .shadow(color: .black.opacity(player.isPlaying ? 0.22 : 0), radius: 12, y: 6)
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 8)
+        .padding(.horizontal, player.isPlaying ? 14 : 12)
+        .background(
+            Capsule().fill(player.isPlaying ? darkBg : Color.black.opacity(hovering ? 0.1 : 0.06))
+        )
+        .shadow(color: .black.opacity(player.isPlaying ? 0.22 : 0), radius: 12, y: 6)
+        .contentShape(Capsule())
+        .onTapGesture { showingPicker.toggle() }
         .onHover { hovering = $0 }
-        .help(player.isPlaying ? "Stop \(player.currentSound?.displayName ?? "")" : "Focus sounds")
+        .help(player.isPlaying ? "Change or stop the focus sound" : "Focus sounds")
         .popover(isPresented: $showingPicker, arrowEdge: .bottom) {
             picker
         }
@@ -64,24 +68,10 @@ struct FocusSoundControl: View {
     private var picker: some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(FocusSound.allCases) { sound in
-                Button {
+                FocusSoundRow(sound: sound, isActive: player.currentSound == sound) {
                     player.play(sound)
                     showingPicker = false
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: sound.icon)
-                            .font(.system(size: 12))
-                            .frame(width: 16)
-                        Text(sound.displayName)
-                            .font(.system(size: 13))
-                        Spacer()
-                    }
-                    .foregroundStyle(Color(hex: 0x3A3A33))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
 
             Divider().padding(.vertical, 6)
@@ -100,6 +90,43 @@ struct FocusSoundControl: View {
         }
         .padding(.vertical, 8)
         .frame(width: 180)
+    }
+}
+
+/// One row in the sound picker — highlights clearly on hover so it's
+/// obvious what you're about to pick, not just a flat list of text.
+private struct FocusSoundRow: View {
+    let sound: FocusSound
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: sound.icon)
+                    .font(.system(size: 12))
+                    .frame(width: 16)
+                Text(sound.displayName)
+                    .font(.system(size: 13))
+                Spacer()
+                if isActive {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+            }
+            .foregroundStyle(Color(hex: 0x3A3A33))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(hovering ? Color.black.opacity(0.08) : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
     }
 }
 
