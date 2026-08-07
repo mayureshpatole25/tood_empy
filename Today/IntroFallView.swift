@@ -124,7 +124,7 @@ private struct GridPatternOverlay: View {
                 y += spacing
             }
         }
-        .opacity(0.25)
+        .opacity(0.175)
         .allowsHitTesting(false)
     }
 }
