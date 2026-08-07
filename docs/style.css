@@ -231,6 +231,18 @@ a { color: inherit; }
 .dock-item.plain { background: transparent; box-shadow: none; }
 .dock-item.plain img { border-radius: 22%; }
 
+/* A little unprompted life every few seconds, like it's saying hi. */
+@keyframes toodBounce {
+  0%   { transform: translateY(0); }
+  4%   { transform: translateY(-11px); }
+  8%   { transform: translateY(0); }
+  11%  { transform: translateY(-5px); }
+  15%  { transform: translateY(0); }
+  100% { transform: translateY(0); }
+}
+.dock-item.tood img { animation: toodBounce 4s ease-in-out infinite; }
+.dock-item.tood:hover img { animation-play-state: paused; }
+
 .dock-tooltip {
   position: absolute;
   bottom: 100%;

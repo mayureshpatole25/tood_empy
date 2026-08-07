@@ -407,6 +407,20 @@
     });
   });
 
+  // Clicking the Tood dock icon downloads immediately, same as the
+  // "Download for Mac" button and the "Download Tood" checklist item.
+  var toodDockItem = document.querySelector(".dock-item.tood");
+  if (toodDockItem) {
+    toodDockItem.addEventListener("click", function () {
+      var a = document.createElement("a");
+      a.href = DOWNLOAD_URL;
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  }
+
   var days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   var now = new Date();
