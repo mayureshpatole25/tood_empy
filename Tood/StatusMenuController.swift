@@ -26,7 +26,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        menu.addItem(withTitle: "Open Today", action: #selector(openHome), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Tood", action: #selector(openHome), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
 
@@ -87,7 +87,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             .target = self
 
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Today", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit Tood", action: #selector(quit), keyEquivalent: "q")
             .target = self
     }
 
@@ -221,24 +221,15 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         FocusSoundPlayer.shared.play(sound)
     }
 
-    /// A small "To / Do" wordmark, stacked like the sticky's own title, in
-    /// place of a generic system-symbol icon for the menu bar.
+    /// The frog glyph — same outline mark as the app/dock icon — drawn as a
+    /// template image so AppKit fills it black on a light menu bar and white
+    /// on a dark one automatically.
     private static func makeMenuBarIcon() -> NSImage {
-        let size = NSSize(width: 22, height: 20)
+        let source = NSImage(named: "MenuBarFrog") ?? NSImage()
+        let aspect = source.size.width > 0 ? source.size.height / source.size.width : 1
+        let size = NSSize(width: 20, height: 20 * aspect)
         let image = NSImage(size: size, flipped: false) { rect in
-            let font = NSFont(name: "HelveticaNeue-Bold", size: 9) ?? NSFont.boldSystemFont(ofSize: 9)
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.alignment = .center
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: NSColor.black,
-                .paragraphStyle: paragraph
-            ]
-            let lineHeight: CGFloat = 10
-            ("To" as NSString).draw(in: NSRect(x: 0, y: lineHeight, width: rect.width, height: lineHeight),
-                                    withAttributes: attrs)
-            ("Do" as NSString).draw(in: NSRect(x: 0, y: 0, width: rect.width, height: lineHeight),
-                                    withAttributes: attrs)
+            source.draw(in: rect)
             return true
         }
         image.isTemplate = true // adapts to light/dark menu bar automatically

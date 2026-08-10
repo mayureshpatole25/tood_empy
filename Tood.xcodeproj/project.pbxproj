@@ -11,7 +11,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C100000000000000000000C1 /* Exceptions for "Today" folder in "Tood" target */ = {
+		C100000000000000000000C1 /* Exceptions for "Tood" folder in "Tood" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -21,12 +21,12 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A600000000000000000000A6 /* Today */ = {
+		A600000000000000000000A6 /* Tood */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				C100000000000000000000C1 /* Exceptions for "Today" folder in "Today" target */,
+				C100000000000000000000C1 /* Exceptions for "Tood" folder in "Tood" target */,
 			);
-			path = Today;
+			path = Tood;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -45,7 +45,7 @@
 		A300000000000000000000A3 = {
 			isa = PBXGroup;
 			children = (
-				A600000000000000000000A6 /* Today */,
+				A600000000000000000000A6 /* Tood */,
 				A400000000000000000000A4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -74,7 +74,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A600000000000000000000A6 /* Today */,
+				A600000000000000000000A6 /* Tood */,
 			);
 			name = Tood;
 			packageProductDependencies = (
@@ -211,14 +211,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Today/Today.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Tood/Tood.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Today/Info.plist;
+				INFOPLIST_FILE = Tood/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -236,14 +236,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Today/Today.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Tood/Tood.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Today/Info.plist;
+				INFOPLIST_FILE = Tood/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

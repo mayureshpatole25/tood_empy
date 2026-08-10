@@ -79,7 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showHome() {
         if homeWindow == nil {
             homeWindow = HostedWindowController(
-                title: "Today",
+                title: "Tood",
                 size: NSSize(width: 900, height: 640),
                 hidesTitleBar: true,
                 content: HomeView(manager: manager, journal: journal)
@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showIntro() {
         let controller = HostedWindowController(
-            title: "Today",
+            title: "Tood",
             size: NSSize(width: 640, height: 520),
             resizable: false,
             hidesTitleBar: true,
@@ -122,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOnboarding() {
         let controller = HostedWindowController(
-            title: "Welcome to Today",
+            title: "Welcome to Tood",
             size: NSSize(width: 640, height: 520),
             resizable: false,
             hidesTitleBar: true,

@@ -25,14 +25,14 @@
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Today uses your location to add an optional location stamp to journal entries. This is never sent anywhere and stays on your Mac.</string>
+	<string>Tood uses your location to add an optional location stamp to journal entries. This is never sent anywhere and stays on your Mac.</string>
 	<key>NSMainNibFile</key>
 	<string></string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.renee.Today.oauth</string>
+			<string>com.renee.Tood.oauth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.1066136870078-ebftr2rvhk0umkp7m5uqap3t46fa86ff</string>

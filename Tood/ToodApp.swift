@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct TodayApp: App {
+struct ToodApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
