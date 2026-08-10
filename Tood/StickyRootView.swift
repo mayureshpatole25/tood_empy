@@ -27,7 +27,7 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    private let chromeHeightEstimate: CGFloat = 232 // title block + spacer + top/bottom padding
+    private let chromeHeightEstimate: CGFloat = 254 // date line + title block + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
@@ -105,20 +105,29 @@ struct StickyRootView: View {
     }
 
     private var header: some View {
-        // Measures the header's *total* width and gives the title an
-        // explicit, fixed budget (total minus a reserved slot for the date)
-        // rather than letting the TextField report its own "ideal" width —
-        // an unconstrained TextField's ideal width just grows with its
-        // content, so measuring that was circular and never actually
-        // constrained anything (titles kept wrapping mid-word regardless).
-        GeometryReader { proxy in
-            let dateReserve: CGFloat = 113 // ~100pt for "MMM dd, yyyy" in any of the 4 fonts, + 13pt gap
-            let titleWidth = max(proxy.size.width - dateReserve, 80)
-            let titleSize = Self.titleFontSize(
-                for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
-            )
+        VStack(alignment: .leading, spacing: 4) {
+            // The date sits on its own line above the title now — it used
+            // to share the title's row (reserving a fixed slot beside it),
+            // which ate into the title's width and made longer titles wrap
+            // mid-word or get cut off. Up here it costs a line of height
+            // instead, and the title gets the sticky's full width.
+            Text(Self.dateFormatter.string(from: model.day))
+                .font(bodyFont(14))
+                .foregroundStyle(color.ink.opacity(0.3))
+                .frame(maxWidth: .infinity, alignment: .trailing)
 
-            HStack(alignment: .top, spacing: 8) {
+            // Measures the header's width and gives the title an explicit,
+            // fixed budget rather than letting the TextField report its own
+            // "ideal" width — an unconstrained TextField's ideal width just
+            // grows with its content, so measuring that was circular and
+            // never actually constrained anything (titles kept wrapping
+            // mid-word regardless).
+            GeometryReader { proxy in
+                let titleWidth = proxy.size.width
+                let titleSize = Self.titleFontSize(
+                    for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
+                )
+
                 // Editable title — wraps naturally up to 2 lines, Regular
                 // weight (Medium read too bold). Steps down in size as the
                 // title gets longer (see `titleFontSize`) so a single word
@@ -135,14 +144,9 @@ struct StickyRootView: View {
                     .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
                     .padding(.trailing, 6) // headroom for negative tracking on the last glyph
                     .frame(width: titleWidth, height: 108, alignment: .topLeading)
-                Spacer(minLength: 0)
-                Text(Self.dateFormatter.string(from: model.day))
-                    .font(bodyFont(14))
-                    .foregroundStyle(color.ink.opacity(0.3))
-                    .padding(.top, 6)
             }
+            .frame(height: 108) // fixes this GeometryReader's own height so it doesn't disrupt the sticky's natural content-height sizing
         }
-        .frame(height: 108) // fixes this GeometryReader's own height so it doesn't disrupt the sticky's natural content-height sizing
     }
 
     /// Shrinks the title (starting from `baseSize`, the user's chosen
