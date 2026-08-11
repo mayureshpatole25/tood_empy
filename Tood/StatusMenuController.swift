@@ -68,6 +68,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         fontItem.submenu = defaultFontMenu()
         menu.addItem(fontItem)
 
+        let titleSizeItem = NSMenuItem(title: "Default Title Size", action: nil, keyEquivalent: "")
+        titleSizeItem.submenu = defaultTitleSizeMenu()
+        menu.addItem(titleSizeItem)
+
         let positionItem = NSMenuItem(title: "New Sticky Position", action: nil, keyEquivalent: "")
         positionItem.submenu = startCornerMenu()
         menu.addItem(positionItem)
@@ -170,6 +174,27 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func setDefaultFont(_ sender: NSMenuItem) {
         guard let font = sender.representedObject as? StickyFont else { return }
         StickyFont.defaultFont = font
+    }
+
+    /// The title size (ceiling) new stickies are created with — same
+    /// setting as Settings' "Title Size" segmented picker.
+    private func defaultTitleSizeMenu() -> NSMenu {
+        let submenu = NSMenu()
+        let current = AppSettings.shared.titleSize
+        for size in StickyTitleSize.allCases {
+            let item = NSMenuItem(title: size.displayName, action: #selector(setDefaultTitleSize(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = size
+            item.state = size == current ? .on : .off
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
+    @objc private func setDefaultTitleSize(_ sender: NSMenuItem) {
+        guard let size = sender.representedObject as? StickyTitleSize else { return }
+        AppSettings.shared.titleSize = size
     }
 
     /// Which screen corner new stickies are tiled from.
