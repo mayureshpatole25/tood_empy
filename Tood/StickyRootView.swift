@@ -16,6 +16,11 @@ struct StickyRootView: View {
     /// The window's current available height, tracked live so the collapse
     /// threshold below stays in sync as the sticky is dragged bigger/smaller.
     @State private var availableHeight: CGFloat = 490
+    /// Same idea, width — read once here instead of via a second
+    /// (height-hungry) `GeometryReader` inside `header`, so the title
+    /// `TextField` can just report its own real 1- or 2-line height instead
+    /// of always reserving room for two.
+    @State private var availableWidth: CGFloat = 378
 
     private let corner: CGFloat = 4
     /// Estimates for how many rows currently fit — not pixel-precise (rows
@@ -27,7 +32,11 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    private let chromeHeightEstimate: CGFloat = 252 // date line + title block + spacer + top/bottom padding
+    // Assumes a one-line title, now that the title box sizes to its actual
+    // line count instead of always reserving two — an under-estimate on a
+    // two-line title, same as this already tolerated being slightly off in
+    // either direction (see `visibleRowCapacity`'s doc comment).
+    private let chromeHeightEstimate: CGFloat = 196 // date line + title line + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
@@ -49,8 +58,14 @@ struct StickyRootView: View {
         .background(
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { availableHeight = proxy.size.height }
-                    .onChange(of: proxy.size.height) { _, newHeight in availableHeight = newHeight }
+                    .onAppear {
+                        availableHeight = proxy.size.height
+                        availableWidth = proxy.size.width
+                    }
+                    .onChange(of: proxy.size) { _, newSize in
+                        availableHeight = newSize.height
+                        availableWidth = newSize.width
+                    }
             }
         )
         .contextMenu { contextMenu }
@@ -115,36 +130,37 @@ struct StickyRootView: View {
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
 
-            // Measures the header's width and gives the title an explicit,
-            // fixed budget rather than letting the TextField report its own
-            // "ideal" width — an unconstrained TextField's ideal width just
-            // grows with its content, so measuring that was circular and
-            // never actually constrained anything (titles kept wrapping
-            // mid-word regardless).
-            GeometryReader { proxy in
-                let titleWidth = proxy.size.width
-                let titleSize = Self.titleFontSize(
-                    for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
-                )
+            // Gives the title an explicit, fixed width budget rather than
+            // letting the TextField report its own "ideal" width — an
+            // unconstrained TextField's ideal width just grows with its
+            // content, so measuring that was circular and never actually
+            // constrained anything (titles kept wrapping mid-word
+            // regardless). Width only, deliberately, and read from
+            // `availableWidth` rather than a local `GeometryReader` — height
+            // is left for the TextField to report on its own, so a one-line
+            // title only takes up one line's worth of room instead of
+            // always reserving space for two.
+            let titleWidth = max(availableWidth - 64, 80) // 64 = content's 32pt horizontal padding × 2
+            let titleSize = Self.titleFontSize(
+                for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
+            )
 
-                // Editable title — wraps naturally up to 2 lines, Regular
-                // weight (Medium read too bold). Steps down in size as the
-                // title gets longer (see `titleFontSize`) so a single word
-                // that can't wrap (no space to break on) shrinks instead of
-                // getting cut mid-word ("Admin" → "Admi"/"n").
-                TextField("To Do", text: titleBinding, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.custom("HelveticaNeue", size: titleSize))
-                    .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
-                    .foregroundStyle(color.titleInk)
-                    .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                    .lineLimit(1...2)
-                    .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
-                    .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
-                    .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                    .frame(width: titleWidth, height: 108, alignment: .topLeading)
-            }
-            .frame(height: 108) // fixes this GeometryReader's own height so it doesn't disrupt the sticky's natural content-height sizing
+            // Editable title — wraps naturally up to 2 lines, Regular
+            // weight (Medium read too bold). Steps down in size as the
+            // title gets longer (see `titleFontSize`) so a single word
+            // that can't wrap (no space to break on) shrinks instead of
+            // getting cut mid-word ("Admin" → "Admi"/"n").
+            TextField("To Do", text: titleBinding, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.custom("HelveticaNeue", size: titleSize))
+                .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
+                .foregroundStyle(color.titleInk)
+                .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                .lineLimit(1...2)
+                .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
+                .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                .padding(.trailing, 6) // headroom for negative tracking on the last glyph
+                .frame(width: titleWidth, alignment: .topLeading)
         }
     }
 
