@@ -6,6 +6,12 @@ import Observation
 struct StickyData: Codable, Identifiable {
     var id: UUID
     var title: String
+    /// The sticky's icon, picked via the emoji field beside the title.
+    /// `nil` covers both "no icon" and "saved before this field existed" —
+    /// `StickyModel.init` treats a `nil` here as a cue to check whether
+    /// `title` itself starts with an emoji (how icons used to be stored)
+    /// and split it out, which is a harmless no-op if it doesn't.
+    var emoji: String?
     var day: Date
     var items: [TodoItem]
     var colorID: StickyColor
@@ -20,6 +26,7 @@ struct StickyData: Codable, Identifiable {
 final class StickyModel: Identifiable {
     let id: UUID
     var title: String
+    var emoji: String?
     var day: Date
     var items: [TodoItem]
     var colorID: StickyColor
@@ -53,21 +60,51 @@ final class StickyModel: Identifiable {
 
     init(data: StickyData) {
         self.id = data.id
-        self.title = data.title
         self.day = data.day
         self.items = data.items
         self.colorID = data.colorID
         self.fontID = data.fontID
         self.frame = data.frame
         self.isVisible = data.isVisible
+
+        if let emoji = data.emoji {
+            self.emoji = emoji
+            self.title = data.title
+        } else {
+            // Before the emoji field existed, the icon (if any) was just
+            // typed as the title's first character, e.g. "🐛 Bugs to
+            // fix" — split that back out once so old stickies still show
+            // their icon. A title with no leading emoji passes through
+            // unchanged.
+            let (extracted, rest) = Self.splitLeadingEmoji(from: data.title)
+            self.emoji = extracted
+            self.title = rest
+        }
     }
 
     var color: StickyColor { colorID }
     var font: StickyFont { fontID }
 
     func snapshot() -> StickyData {
-        StickyData(id: id, title: title, day: day, items: items,
+        StickyData(id: id, title: title, emoji: emoji, day: day, items: items,
                    colorID: colorID, fontID: fontID, frame: frame, isVisible: isVisible)
+    }
+
+    /// The title with its icon prefixed back on, for read-only contexts
+    /// (status menu, Home dashboard) that showed the emoji baked into the
+    /// title text before it became its own field.
+    var displayTitle: String {
+        let base = title.isEmpty ? "To Do" : title
+        guard let emoji, !emoji.isEmpty else { return base }
+        return "\(emoji) \(base)"
+    }
+
+    private static func splitLeadingEmoji(from title: String) -> (emoji: String?, rest: String) {
+        guard let first = title.first, first.isEmoji else { return (nil, title) }
+        var rest = title
+        rest.removeFirst()
+        if rest.first == " " { rest.removeFirst() }
+        return (String(first), rest)
     }
 
     // MARK: - Ordering
@@ -137,6 +174,7 @@ final class StickyModel: Identifiable {
     func setColor(_ c: StickyColor) { colorID = c; onChange?() }
     func setFont(_ f: StickyFont) { fontID = f; onChange?() }
     func setTitle(_ t: String) { title = t; onChange?() }
+    func setEmoji(_ e: String?) { emoji = (e?.isEmpty == true) ? nil : e; onChange?() }
 
     // MARK: - Factory
 
@@ -148,6 +186,7 @@ final class StickyModel: Identifiable {
         let data = StickyData(
             id: UUID(),
             title: "To Do",
+            emoji: nil,
             day: Date(),
             items: [TodoItem()], // start with one empty line, ready to type
             colorID: color,
@@ -156,5 +195,17 @@ final class StickyModel: Identifiable {
             isVisible: true
         )
         return StickyModel(data: data)
+    }
+}
+
+private extension Character {
+    /// True for an actual pictographic emoji, not just any scalar in the
+    /// range Unicode happens to flag `isEmoji` (e.g. plain digits and "#"
+    /// are technically `isEmoji` — they only render as emoji combined with
+    /// a variation selector, which is why this also checks for a multi-
+    /// scalar cluster or a codepoint past the ASCII/symbol range).
+    var isEmoji: Bool {
+        guard let first = unicodeScalars.first else { return false }
+        return first.properties.isEmoji && (first.value > 0x238C || unicodeScalars.count > 1)
     }
 }

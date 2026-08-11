@@ -8,6 +8,7 @@ struct StickyRootView: View {
     unowned let controller: StickyController
 
     @FocusState private var focusedID: UUID?
+    @FocusState private var emojiFieldFocused: Bool
     @State private var hovering = false
     @State private var showColors = false
     @State private var showFonts = false
@@ -116,35 +117,70 @@ struct StickyRootView: View {
                 .foregroundStyle(color.ink.opacity(0.3))
 
             // Measures the header's width and gives the title an explicit,
-            // fixed budget rather than letting the TextField report its own
-            // "ideal" width — an unconstrained TextField's ideal width just
-            // grows with its content, so measuring that was circular and
-            // never actually constrained anything (titles kept wrapping
-            // mid-word regardless).
+            // fixed budget (total minus the emoji field's slot) rather than
+            // letting the TextField report its own "ideal" width — an
+            // unconstrained TextField's ideal width just grows with its
+            // content, so measuring that was circular and never actually
+            // constrained anything (titles kept wrapping mid-word
+            // regardless).
             GeometryReader { proxy in
-                let titleWidth = proxy.size.width
+                let emojiSize = AppSettings.shared.titleSize.baseSize
+                let emojiSlot: CGFloat = emojiSize * 1.05
+                let gap: CGFloat = 6
+                let titleWidth = max(proxy.size.width - emojiSlot - gap, 80)
                 let titleSize = Self.titleFontSize(
                     for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
                 )
 
-                // Editable title — wraps naturally up to 2 lines, Regular
-                // weight (Medium read too bold). Steps down in size as the
-                // title gets longer (see `titleFontSize`) so a single word
-                // that can't wrap (no space to break on) shrinks instead of
-                // getting cut mid-word ("Admin" → "Admi"/"n").
-                TextField("To Do", text: titleBinding, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.custom("HelveticaNeue", size: titleSize))
-                    .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
-                    .foregroundStyle(color.titleInk)
-                    .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                    .lineLimit(1...2)
-                    .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
-                    .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
-                    .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                    .frame(width: titleWidth, height: 108, alignment: .topLeading)
+                HStack(alignment: .top, spacing: gap) {
+                    emojiField(size: emojiSize, slotWidth: emojiSlot)
+
+                    // Editable title — wraps naturally up to 2 lines, Regular
+                    // weight (Medium read too bold). Steps down in size as
+                    // the title gets longer (see `titleFontSize`) so a
+                    // single word that can't wrap (no space to break on)
+                    // shrinks instead of getting cut mid-word ("Admin" →
+                    // "Admi"/"n").
+                    TextField("To Do", text: titleBinding, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.custom("HelveticaNeue", size: titleSize))
+                        .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
+                        .foregroundStyle(color.titleInk)
+                        .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                        .lineLimit(1...2)
+                        .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
+                        .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                        .padding(.trailing, 6) // headroom for negative tracking on the last glyph
+                        .frame(width: titleWidth, height: 108, alignment: .topLeading)
+                }
             }
             .frame(height: 108) // fixes this GeometryReader's own height so it doesn't disrupt the sticky's natural content-height sizing
+        }
+    }
+
+    /// The icon slot to the left of the title — tapping it focuses a
+    /// (visually real, just icon-sized) text field and pops open macOS's
+    /// own Emoji & Symbols picker, Notion-style, rather than reimplementing
+    /// an emoji grid ourselves. Typing an emoji directly, or the system
+    /// shortcut (⌃⌘Space), works too, same as any other text field. Shows a
+    /// faint "+" on hover when there's no icon yet.
+    private func emojiField(size: CGFloat, slotWidth: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            if model.emoji == nil {
+                Text("+")
+                    .font(.system(size: size * 0.5, weight: .light))
+                    .foregroundStyle(color.ink.opacity(hovering ? 0.25 : 0))
+                    .frame(width: slotWidth, height: 108, alignment: .topLeading)
+                    .allowsHitTesting(false)
+            }
+            TextField("", text: emojiBinding)
+                .textFieldStyle(.plain)
+                .font(.system(size: size))
+                .focused($emojiFieldFocused)
+                .onChange(of: emojiFieldFocused) { _, focused in
+                    if focused { NSApp.orderFrontCharacterPalette(nil) }
+                }
+                .frame(width: slotWidth, height: 108, alignment: .topLeading)
         }
     }
 
@@ -179,6 +215,17 @@ struct StickyRootView: View {
 
     private var titleBinding: Binding<String> {
         Binding(get: { model.title }, set: { model.setTitle($0) })
+    }
+
+    private var emojiBinding: Binding<String> {
+        Binding(
+            get: { model.emoji ?? "" },
+            // Only ever keep the most recently typed/inserted character —
+            // the field starts from whatever's already there (so the
+            // picker can replace it), and the system palette can insert
+            // more than one character if double-clicked.
+            set: { model.setEmoji($0.last.map(String.init)) }
+        )
     }
 
     /// Minimize + dismiss, pinned to the top-right corner, independent of
