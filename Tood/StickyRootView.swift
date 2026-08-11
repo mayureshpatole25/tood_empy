@@ -27,7 +27,7 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    private let chromeHeightEstimate: CGFloat = 254 // date line + title block + spacer + top/bottom padding
+    private let chromeHeightEstimate: CGFloat = 252 // date line + title block + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
@@ -96,7 +96,7 @@ struct StickyRootView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Spacer().frame(height: 32)
+            Spacer().frame(height: 26)
             checklist
         }
         .padding(.horizontal, 32)
@@ -105,7 +105,7 @@ struct StickyRootView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
             // The date sits on its own line above the title now — it used
             // to share the title's row (reserving a fixed slot beside it),
             // which ate into the title's width and made longer titles wrap

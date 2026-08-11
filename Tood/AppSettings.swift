@@ -65,7 +65,7 @@ final class AppSettings {
         journalPrompt = d.string(forKey: Keys.journalPrompt) ?? "What's actually on your mind today?"
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
-        titleSize = d.string(forKey: Keys.titleSize).flatMap(StickyTitleSize.init(rawValue:)) ?? .large
+        titleSize = d.string(forKey: Keys.titleSize).flatMap(StickyTitleSize.init(rawValue:)) ?? .medium
     }
 
     private enum Keys {
