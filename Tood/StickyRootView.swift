@@ -114,7 +114,6 @@ struct StickyRootView: View {
             Text(Self.dateFormatter.string(from: model.day))
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
-                .frame(maxWidth: .infinity, alignment: .trailing)
 
             // Measures the header's width and gives the title an explicit,
             // fixed budget rather than letting the TextField report its own
