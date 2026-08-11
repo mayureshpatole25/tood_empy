@@ -303,7 +303,7 @@ struct StickyDeskCard: View {
         Button(action: onShow) {
             ZStack(alignment: .topTrailing) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(model.displayTitle)
+                    Text(model.title.isEmpty ? "To Do" : model.title)
                         .font(.custom("HelveticaNeue", size: 17))
                         .foregroundStyle(model.color.titleInk)
                         .lineLimit(1)

@@ -8,7 +8,6 @@ struct StickyRootView: View {
     unowned let controller: StickyController
 
     @FocusState private var focusedID: UUID?
-    @FocusState private var emojiFieldFocused: Bool
     @State private var hovering = false
     @State private var showColors = false
     @State private var showFonts = false
@@ -28,7 +27,7 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    private let chromeHeightEstimate: CGFloat = 294 // date line + icon row + title block + spacer + top/bottom padding
+    private let chromeHeightEstimate: CGFloat = 254 // date line + title block + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
@@ -116,13 +115,6 @@ struct StickyRootView: View {
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
 
-            // The icon sits in its own row above the title (Notion-style),
-            // not beside it — beside it, wrapped second/third lines had to
-            // either share the title's indent (crowding the title) or lose
-            // it (leaving a lopsided gap under the icon on line one). Above,
-            // the title just gets the sticky's full width on every line.
-            emojiRow
-
             // Measures the header's width and gives the title an explicit,
             // fixed budget rather than letting the TextField report its own
             // "ideal" width — an unconstrained TextField's ideal width just
@@ -156,48 +148,6 @@ struct StickyRootView: View {
         }
     }
 
-    /// The icon row above the title — tapping the icon focuses a (visually
-    /// real, icon-sized) text field and pops open macOS's own Emoji &
-    /// Symbols picker, Notion-style, rather than reimplementing an emoji
-    /// grid ourselves. Typing an emoji directly, or the system shortcut
-    /// (⌃⌘Space), works too, same as any other text field. With no icon set,
-    /// hovering the sticky reveals a Notion-style "Add icon" hint in its
-    /// place; with one set, a small "×" appears on hover to remove it again
-    /// (clearing the field by hand, e.g. backspace, works too).
-    private var emojiRow: some View {
-        HStack(spacing: 4) {
-            ZStack(alignment: .topLeading) {
-                if model.emoji == nil {
-                    Text("🙂 Add icon")
-                        .font(bodyFont(13))
-                        .foregroundStyle(color.ink.opacity(hovering ? 0.35 : 0))
-                        .allowsHitTesting(false)
-                }
-                TextField("", text: emojiBinding)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: model.emoji == nil ? 13 : 32))
-                    .focused($emojiFieldFocused)
-                    .onChange(of: emojiFieldFocused) { _, focused in
-                        if focused { NSApp.orderFrontCharacterPalette(nil) }
-                    }
-            }
-            .frame(minWidth: 90, alignment: .topLeading)
-
-            if model.emoji != nil {
-                Button { model.setEmoji(nil) } label: {
-                    Text("×")
-                        .font(.system(size: 15))
-                        .foregroundStyle(color.ink.opacity(0.35))
-                        .frame(width: 18, height: 18)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .opacity(hovering ? 1 : 0)
-            }
-        }
-        .frame(height: 36, alignment: .topLeading)
-    }
-
     /// Shrinks the title (starting from `baseSize`, the user's chosen
     /// ceiling in Settings) until its widest *unbroken word* actually fits
     /// `availableWidth` — a character-count tier isn't right here, since a
@@ -229,17 +179,6 @@ struct StickyRootView: View {
 
     private var titleBinding: Binding<String> {
         Binding(get: { model.title }, set: { model.setTitle($0) })
-    }
-
-    private var emojiBinding: Binding<String> {
-        Binding(
-            get: { model.emoji ?? "" },
-            // Only ever keep the most recently typed/inserted character —
-            // the field starts from whatever's already there (so the
-            // picker can replace it), and the system palette can insert
-            // more than one character if double-clicked.
-            set: { model.setEmoji($0.last.map(String.init)) }
-        )
     }
 
     /// Minimize + dismiss, pinned to the top-right corner, independent of

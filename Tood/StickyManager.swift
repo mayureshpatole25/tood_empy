@@ -110,7 +110,9 @@ final class StickyManager {
     func stickyList() -> [(title: String, id: UUID)] {
         order.compactMap { id in
             guard let c = controllers[id] else { return nil }
-            return (String(c.model.displayTitle.prefix(30)), id)
+            let title = c.model.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let label = title.isEmpty ? "To Do" : title
+            return (String(label.prefix(30)), id)
         }
     }
 
