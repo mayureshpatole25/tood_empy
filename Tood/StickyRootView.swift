@@ -16,11 +16,12 @@ struct StickyRootView: View {
     /// The window's current available height, tracked live so the collapse
     /// threshold below stays in sync as the sticky is dragged bigger/smaller.
     @State private var availableHeight: CGFloat = 490
-    /// Same idea, width — read once here instead of via a second
-    /// (height-hungry) `GeometryReader` inside `header`, so the title
-    /// `TextField` can just report its own real 1- or 2-line height instead
-    /// of always reserving room for two.
-    @State private var availableWidth: CGFloat = 378
+    /// Whether the title currently needs its second line — read inside
+    /// `header`'s own `GeometryReader` (which the title box's height can't
+    /// see, since it's set on that `GeometryReader` itself) and mirrored out
+    /// here so the title box can still be sized down to one line's worth of
+    /// room instead of always reserving space for two.
+    @State private var titleWrapsToTwoLines = false
 
     private let corner: CGFloat = 4
     /// Estimates for how many rows currently fit — not pixel-precise (rows
@@ -58,14 +59,8 @@ struct StickyRootView: View {
         .background(
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear {
-                        availableHeight = proxy.size.height
-                        availableWidth = proxy.size.width
-                    }
-                    .onChange(of: proxy.size) { _, newSize in
-                        availableHeight = newSize.height
-                        availableWidth = newSize.width
-                    }
+                    .onAppear { availableHeight = proxy.size.height }
+                    .onChange(of: proxy.size.height) { _, newHeight in availableHeight = newHeight }
             }
         )
         .contextMenu { contextMenu }
@@ -130,38 +125,58 @@ struct StickyRootView: View {
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
 
-            // Gives the title an explicit, fixed width budget rather than
-            // letting the TextField report its own "ideal" width — an
-            // unconstrained TextField's ideal width just grows with its
-            // content, so measuring that was circular and never actually
-            // constrained anything (titles kept wrapping mid-word
-            // regardless). Width only, deliberately, and read from
-            // `availableWidth` rather than a local `GeometryReader` — height
-            // is left for the TextField to report on its own, so a one-line
-            // title only takes up one line's worth of room instead of
-            // always reserving space for two.
-            let titleWidth = max(availableWidth - 64, 80) // 64 = content's 32pt horizontal padding × 2
-            let titleSize = Self.titleFontSize(
-                for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
-            )
+            // Measures the header's width and gives the title an explicit,
+            // fixed budget rather than letting the TextField report its own
+            // "ideal" width — an unconstrained TextField's ideal width just
+            // grows with its content, so measuring that was circular and
+            // never actually constrained anything (titles kept wrapping
+            // mid-word regardless).
+            GeometryReader { proxy in
+                let titleWidth = proxy.size.width
+                let titleSize = Self.titleFontSize(
+                    for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
+                )
+                // A one-line title only needs about half the box a two-line
+                // one does — checked the cheap way (does the whole title,
+                // not just its longest word, fit on one line at this
+                // width/size) rather than a full line-wrap layout pass.
+                let wraps = Self.titleWraps(
+                    model.title, font: titleSize, availableWidth: titleWidth - 6 // -6 to match the trailing padding below
+                )
+                let titleBoxHeight: CGFloat = wraps ? 108 : 58
 
-            // Editable title — wraps naturally up to 2 lines, Regular
-            // weight (Medium read too bold). Steps down in size as the
-            // title gets longer (see `titleFontSize`) so a single word
-            // that can't wrap (no space to break on) shrinks instead of
-            // getting cut mid-word ("Admin" → "Admi"/"n").
-            TextField("To Do", text: titleBinding, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.custom("HelveticaNeue", size: titleSize))
-                .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
-                .foregroundStyle(color.titleInk)
-                .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                .lineLimit(1...2)
-                .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
-                .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
-                .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                .frame(width: titleWidth, alignment: .topLeading)
+                // Editable title — wraps naturally up to 2 lines, Regular
+                // weight (Medium read too bold). Steps down in size as the
+                // title gets longer (see `titleFontSize`) so a single word
+                // that can't wrap (no space to break on) shrinks instead of
+                // getting cut mid-word ("Admin" → "Admi"/"n").
+                TextField("To Do", text: titleBinding, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.custom("HelveticaNeue", size: titleSize))
+                    .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
+                    .foregroundStyle(color.titleInk)
+                    .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                    .lineLimit(1...2)
+                    .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
+                    .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                    .padding(.trailing, 6) // headroom for negative tracking on the last glyph
+                    .frame(width: titleWidth, height: titleBoxHeight, alignment: .topLeading)
+                    .onAppear { titleWrapsToTwoLines = wraps }
+                    .onChange(of: wraps) { _, new in titleWrapsToTwoLines = new }
+            }
+            .frame(height: titleWrapsToTwoLines ? 108 : 58) // mirrors the TextField's own height so this GeometryReader doesn't disrupt the sticky's natural content-height sizing
         }
+    }
+
+    /// Whether `text`, rendered at `font`pt, is wide enough to need a second
+    /// line at `availableWidth` — a single-line width check (matching
+    /// `titleFontSize`'s own measurement technique), not a full line-wrap
+    /// layout pass, since all we need is which side of that line it's on.
+    private static func titleWraps(_ text: String, font: CGFloat, availableWidth: CGFloat) -> Bool {
+        guard !text.isEmpty else { return false }
+        let nsFont = NSFont(name: "HelveticaNeue", size: font) ?? NSFont.systemFont(ofSize: font)
+        let width = (text as NSString).size(withAttributes: [.font: nsFont, .kern: font * -0.06]).width
+        return width > availableWidth
     }
 
     /// Shrinks the title (starting from `baseSize`, the user's chosen
@@ -259,8 +274,8 @@ struct StickyRootView: View {
             ForEach(visibleItems) { item in
                 row(item)
             }
-            toggleIfNeeded
             addRowButton
+            toggleIfNeeded
         }
         // No `.animation(value: model.items)` here — the checkbox's own
         // `withAnimation` at the toggle call site is the single source of
