@@ -33,11 +33,14 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    // Assumes a one-line title, now that the title box sizes to its actual
-    // line count instead of always reserving two — an under-estimate on a
-    // two-line title, same as this already tolerated being slightly off in
-    // either direction (see `visibleRowCapacity`'s doc comment).
-    private let chromeHeightEstimate: CGFloat = 196 // date line + title line + spacer + top/bottom padding
+    /// Tracks `titleWrapsToTwoLines` (the title box is 58pt or 108pt — see
+    /// `header`) so this stays accurate for both — a flat one-size estimate
+    /// undershot on two-line titles enough to cause a visible double-snap on
+    /// "Show less" (the rough estimate applied first, then almost
+    /// immediately corrected by `recheckContentSize()`'s precise remeasure).
+    private var chromeHeightEstimate: CGFloat { // date line + title box + spacer + top/bottom padding
+        titleWrapsToTwoLines ? 246 : 196
+    }
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
