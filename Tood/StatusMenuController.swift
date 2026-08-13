@@ -93,6 +93,8 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
             .target = self
+        menu.addItem(withTitle: "Report a Bug…", action: #selector(reportBug), keyEquivalent: "")
+            .target = self
 
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
@@ -108,6 +110,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func openHome() { appDelegate?.showHome() }
     @objc private func openSettings() { appDelegate?.showSettings() }
     @objc private func checkForUpdates() { appDelegate?.checkForUpdates() }
+    @objc private func reportBug() { appDelegate?.showReportBug() }
     @objc private func showActiveSticky() { manager.showActiveSticky() }
     @objc private func newSticky() { manager.newSticky() }
     @objc private func showAll() { manager.showAll() }

@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: HostedWindowController<SettingsView>?
     private var onboardingWindow: HostedWindowController<OnboardingView>?
     private var introWindow: HostedWindowController<IntroFallView>?
+    private var reportBugWindow: HostedWindowController<ReportBugView>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Regular app: Dock icon visible, matches LSUIElement=false in
@@ -116,6 +117,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         settingsWindow?.present()
+    }
+
+    /// Fresh window every time (unlike Settings/Home, which stay around) —
+    /// this is a one-shot form, not persistent state, so reopening it later
+    /// should start blank rather than showing whatever was left over from
+    /// the last report.
+    func showReportBug() {
+        let controller = HostedWindowController(
+            title: "Report a Bug",
+            size: NSSize(width: 420, height: 400),
+            resizable: false,
+            content: ReportBugView(onDone: { [weak self] in
+                self?.reportBugWindow?.close()
+                self?.reportBugWindow = nil
+            })
+        )
+        reportBugWindow = controller
+        controller.present()
     }
 
     private func showIntro() {
