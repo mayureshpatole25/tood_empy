@@ -15,7 +15,23 @@ struct ArchivedStickiesView: View {
     @State private var viewing: ArchivedSticky?
 
     private let desk = Color(hex: 0xFBF8F1)
-    private let columns = [GridItem(.adaptive(minimum: DeskCardMetrics.width + 24), spacing: 24)]
+    private let sheetWidth: CGFloat = 640
+    private let columnCount = 3
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 24), count: 3)
+
+    /// A ScrollView's ideal height is flexible by design (it's built to
+    /// absorb overflow, not report a natural size), so left alone the sheet
+    /// always claimed a fixed, mostly-empty 640×560 regardless of how many
+    /// stickies were actually archived. Sizing to the real row count instead
+    /// (capped, so a big archive still scrolls) makes a couple of memories
+    /// look like a couple of memories instead of two cards adrift in a mostly
+    /// blank sheet.
+    private var rows: Int { max(1, Int(ceil(Double(entries.count) / Double(columnCount)))) }
+    private var gridContentHeight: CGFloat {
+        let rowHeight: CGFloat = DeskCardMetrics.height + 26 + 28 // card + date label + row spacing
+        return min(CGFloat(rows) * rowHeight + 20, 480) // caps out and scrolls past ~2 rows
+    }
+    private var sheetHeight: CGFloat { 68 + (entries.isEmpty ? 220 : gridContentHeight) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -26,7 +42,7 @@ struct ArchivedStickiesView: View {
                 grid
             }
         }
-        .frame(width: 640, height: 560)
+        .frame(width: sheetWidth, height: sheetHeight)
         .background(desk)
         .onAppear { reload() }
         .sheet(item: $viewing) { entry in
