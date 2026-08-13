@@ -6,20 +6,22 @@
     <description>Automatic updates for Tood.</description>
     <language>en</language>
     <item>
-      <title>Version 1.6.0</title>
-      <pubDate>Thu, 13 Aug 2026 10:05:00 +0000</pubDate>
-      <sparkle:version>7</sparkle:version>
-      <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
+      <title>Version 1.7.0</title>
+      <pubDate>Thu, 13 Aug 2026 11:15:00 +0000</pubDate>
+      <sparkle:version>8</sparkle:version>
+      <sparkle:shortVersionString>1.7.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <ul>
-          <li>Journal sidebar: added a "TODAY" label above today's entry and more breathing room at the top</li>
+          <li>New "Report a Bug…" in the status menu: text + optional screenshot, sent straight to feedback</li>
+          <li>Fixed the report form's cursor showing the app's green accent instead of a neutral color</li>
+          <li>Support for occasional in-app announcements going forward</li>
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.6.0/Tood.dmg"
-        sparkle:edSignature="9Ve8zDLktFO3X+7tduRr14oml/yvoB6EKxLYHnbrr03QHwMKCLk64k19mGMZISAlAjus/1yibcWhDJXm+TR+Aw=="
-        length="3695728"
+        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.7.0/Tood.dmg"
+        sparkle:edSignature="F83HdnQQ+pQsX+NV6/BvZMGm8q2d+4UssSr3LAoXAoZymxxTLiv/3s1UubG2yKq6w5I3aXWYwOZLGnReadJZAQ=="
+        length="3747904"
         type="application/octet-stream" />
     </item>
   </channel>
