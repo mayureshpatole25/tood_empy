@@ -6,20 +6,20 @@
     <description>Automatic updates for Tood.</description>
     <language>en</language>
     <item>
-      <title>Version 1.5.0</title>
-      <pubDate>Thu, 13 Aug 2026 09:36:00 +0000</pubDate>
-      <sparkle:version>6</sparkle:version>
-      <sparkle:shortVersionString>1.5.0</sparkle:shortVersionString>
+      <title>Version 1.6.0</title>
+      <pubDate>Thu, 13 Aug 2026 10:05:00 +0000</pubDate>
+      <sparkle:version>7</sparkle:version>
+      <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <ul>
-          <li>Fixes a title's second/third line sometimes silently disappearing from view (text was always saved, just not always shown)</li>
+          <li>Journal sidebar: added a "TODAY" label above today's entry and more breathing room at the top</li>
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.5.0/Tood.dmg"
-        sparkle:edSignature="38LcZEwMKO5MGBRCR+7dkMOt9glazJlsSUf+zsG6WzXgouNDP//7VGs7KCFL9biuDvHHbKphQBBpFcT5CTWnDQ=="
-        length="3694583"
+        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.6.0/Tood.dmg"
+        sparkle:edSignature="9Ve8zDLktFO3X+7tduRr14oml/yvoB6EKxLYHnbrr03QHwMKCLk64k19mGMZISAlAjus/1yibcWhDJXm+TR+Aw=="
+        length="3695728"
         type="application/octet-stream" />
     </item>
   </channel>

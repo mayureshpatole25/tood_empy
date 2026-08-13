@@ -4,7 +4,7 @@
 // real file — GitHub's own per-asset download count resets to 0 every
 // time the asset is replaced, which happens on every app update, so it
 // can't tell you a lifetime total on its own.
-const DMG_URL = "https://github.com/reneezhang99/to-do-app/releases/download/v1.5.0/Tood.dmg";
+const DMG_URL = "https://github.com/reneezhang99/to-do-app/releases/download/v1.6.0/Tood.dmg";
 
 export default async function handler(req, res) {
   const kvUrl = process.env.KV_REST_API_URL;
