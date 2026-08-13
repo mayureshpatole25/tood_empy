@@ -57,18 +57,14 @@ struct JournalZenView: View {
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                sidebarSectionLabel("TODAY")
                 sidebarRow(title: "Today", preview: journal.todaysText, isSelected: isTodaySelected) {
                     selectedDay = today
                     bodyFocused = true
                 }
                 if !pastEntries.isEmpty {
-                    Text("PAST ENTRIES")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(0.5)
-                        .foregroundStyle(.secondary.opacity(0.6))
-                        .padding(.horizontal, 16)
+                    sidebarSectionLabel("PAST ENTRIES")
                         .padding(.top, 16)
-                        .padding(.bottom, 6)
                     ForEach(pastEntries) { entry in
                         sidebarRow(
                             title: Self.dayFormatter.string(from: entry.day),
@@ -81,10 +77,20 @@ struct JournalZenView: View {
                     }
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.top, 20) // extra breathing room above "TODAY" beyond the section label's own padding
+            .padding(.bottom, 8)
         }
         .frame(width: 220)
         .background(Color.black.opacity(0.02))
+    }
+
+    private func sidebarSectionLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .tracking(0.5)
+            .foregroundStyle(.secondary.opacity(0.6))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
     }
 
     private func sidebarRow(title: String, preview: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
