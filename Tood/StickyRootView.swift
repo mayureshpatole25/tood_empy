@@ -16,12 +16,17 @@ struct StickyRootView: View {
     /// The window's current available height, tracked live so the collapse
     /// threshold below stays in sync as the sticky is dragged bigger/smaller.
     @State private var availableHeight: CGFloat = 490
-    /// Whether the title currently needs its second line — read inside
-    /// `header`'s own `GeometryReader` (which the title box's height can't
-    /// see, since it's set on that `GeometryReader` itself) and mirrored out
-    /// here so the title box can still be sized down to one line's worth of
-    /// room instead of always reserving space for two.
-    @State private var titleWrapsToTwoLines = false
+    /// Same idea, width — the title needs it (see `header`) without a local
+    /// `GeometryReader` forcing a fixed height on it. A previous version
+    /// used a `titleWraps` heuristic (does the whole title fit on one line?)
+    /// to pick between a 58pt/108pt box, on the assumption that "doesn't fit
+    /// on one line" always means "fits in two" — it doesn't (emoji + a few
+    /// words can need three), and since the box couldn't grow past whichever
+    /// of those two heights it guessed, the overflow just silently clipped:
+    /// title text still in the data, invisibly cut from view. Letting the
+    /// TextField size itself intrinsically, with no guess in the way, is
+    /// what actually guarantees it never happens.
+    @State private var availableWidth: CGFloat = 378
 
     private let corner: CGFloat = 4
     /// Estimates for how many rows currently fit — not pixel-precise (rows
@@ -33,14 +38,11 @@ struct StickyRootView: View {
     /// double-snap on "Show less"/"N more" for longer lists, since every
     /// row's error compounded across the whole list.
     private let rowHeightEstimate: CGFloat = 47
-    /// Tracks `titleWrapsToTwoLines` (the title box is 58pt or 108pt — see
-    /// `header`) so this stays accurate for both — a flat one-size estimate
-    /// undershot on two-line titles enough to cause a visible double-snap on
-    /// "Show less" (the rough estimate applied first, then almost
-    /// immediately corrected by `recheckContentSize()`'s precise remeasure).
-    private var chromeHeightEstimate: CGFloat { // date line + title box + spacer + top/bottom padding
-        titleWrapsToTwoLines ? 246 : 196
-    }
+    /// Assumes a two-line title, since the title itself is intrinsically
+    /// sized now (see `header`) rather than a fixed/guessed height — an
+    /// overestimate on a one-line title, same as this already tolerates
+    /// being off in either direction (the doc comment above).
+    private let chromeHeightEstimate: CGFloat = 254 // date line + title block + spacer + top/bottom padding
     /// Where "Show less" collapses back down to.
     private let defaultCollapsedRows = 6
 
@@ -62,8 +64,14 @@ struct StickyRootView: View {
         .background(
             GeometryReader { proxy in
                 Color.clear
-                    .onAppear { availableHeight = proxy.size.height }
-                    .onChange(of: proxy.size.height) { _, newHeight in availableHeight = newHeight }
+                    .onAppear {
+                        availableHeight = proxy.size.height
+                        availableWidth = proxy.size.width
+                    }
+                    .onChange(of: proxy.size) { _, newSize in
+                        availableHeight = newSize.height
+                        availableWidth = newSize.width
+                    }
             }
         )
         .contextMenu { contextMenu }
@@ -128,58 +136,43 @@ struct StickyRootView: View {
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
 
-            // Measures the header's width and gives the title an explicit,
-            // fixed budget rather than letting the TextField report its own
-            // "ideal" width — an unconstrained TextField's ideal width just
-            // grows with its content, so measuring that was circular and
-            // never actually constrained anything (titles kept wrapping
-            // mid-word regardless).
-            GeometryReader { proxy in
-                let titleWidth = proxy.size.width
-                let titleSize = Self.titleFontSize(
-                    for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
-                )
-                // A one-line title only needs about half the box a two-line
-                // one does — checked the cheap way (does the whole title,
-                // not just its longest word, fit on one line at this
-                // width/size) rather than a full line-wrap layout pass.
-                let wraps = Self.titleWraps(
-                    model.title, font: titleSize, availableWidth: titleWidth - 6 // -6 to match the trailing padding below
-                )
-                let titleBoxHeight: CGFloat = wraps ? 108 : 58
+            // Gives the title an explicit, fixed width budget — an
+            // unconstrained TextField's ideal width just grows with its
+            // content, so measuring that was circular and never actually
+            // constrained anything (titles kept wrapping mid-word
+            // regardless) — but deliberately no fixed *height*. A previous
+            // version picked between a 58pt/108pt box using a "does it fit
+            // on one line?" guess, on the assumption that "no" always means
+            // "fits in two" — it doesn't (emoji + a few words can need
+            // three), and since the box couldn't grow past whichever height
+            // it guessed, real title text silently clipped out of view.
+            // Leaving height alone lets the TextField report however tall
+            // it genuinely needs to be, which is the only way to guarantee
+            // that never happens again.
+            let titleWidth = max(availableWidth - 64, 80) // 64 = content's 32pt horizontal padding × 2
+            let titleSize = Self.titleFontSize(
+                for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
+            )
 
-                // Editable title — wraps naturally up to 2 lines, Regular
-                // weight (Medium read too bold). Steps down in size as the
-                // title gets longer (see `titleFontSize`) so a single word
-                // that can't wrap (no space to break on) shrinks instead of
-                // getting cut mid-word ("Admin" → "Admi"/"n").
-                TextField("To Do", text: titleBinding, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.custom("HelveticaNeue", size: titleSize))
-                    .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
-                    .foregroundStyle(color.titleInk)
-                    .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                    .lineLimit(1...2)
-                    .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
-                    .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
-                    .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                    .frame(width: titleWidth, height: titleBoxHeight, alignment: .topLeading)
-                    .onAppear { titleWrapsToTwoLines = wraps }
-                    .onChange(of: wraps) { _, new in titleWrapsToTwoLines = new }
-            }
-            .frame(height: titleWrapsToTwoLines ? 108 : 58) // mirrors the TextField's own height so this GeometryReader doesn't disrupt the sticky's natural content-height sizing
+            // Editable title — wraps naturally up to 3 lines (comfortably
+            // covers "icon + a few words"; the shrink-to-fit below already
+            // handles a single overlong word), Regular weight (Medium read
+            // too bold). Steps down in size as the title gets longer (see
+            // `titleFontSize`) so a single word that can't wrap (no space to
+            // break on) shrinks instead of getting cut mid-word ("Admin" →
+            // "Admi"/"n").
+            TextField("To Do", text: titleBinding, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.custom("HelveticaNeue", size: titleSize))
+                .tracking(titleSize * -0.06) // -6% of size, same ratio at every step
+                .foregroundStyle(color.titleInk)
+                .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                .lineLimit(1...3)
+                .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
+                .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                .padding(.trailing, 6) // headroom for negative tracking on the last glyph
+                .frame(width: titleWidth, alignment: .topLeading)
         }
-    }
-
-    /// Whether `text`, rendered at `font`pt, is wide enough to need a second
-    /// line at `availableWidth` — a single-line width check (matching
-    /// `titleFontSize`'s own measurement technique), not a full line-wrap
-    /// layout pass, since all we need is which side of that line it's on.
-    private static func titleWraps(_ text: String, font: CGFloat, availableWidth: CGFloat) -> Bool {
-        guard !text.isEmpty else { return false }
-        let nsFont = NSFont(name: "HelveticaNeue", size: font) ?? NSFont.systemFont(ofSize: font)
-        let width = (text as NSString).size(withAttributes: [.font: nsFont, .kern: font * -0.06]).width
-        return width > availableWidth
     }
 
     /// Shrinks the title (starting from `baseSize`, the user's chosen
