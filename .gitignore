@@ -19,5 +19,8 @@ xcuserdata/
 # macOS
 .DS_Store
 
+# Vercel
+.vercel
+
 # Secrets
 Tood/Secrets.swift
