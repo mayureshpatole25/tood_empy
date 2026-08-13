@@ -6,20 +6,20 @@
     <description>Automatic updates for Tood.</description>
     <language>en</language>
     <item>
-      <title>Version 1.3.0</title>
-      <pubDate>Thu, 13 Aug 2026 09:10:00 +0000</pubDate>
-      <sparkle:version>4</sparkle:version>
-      <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+      <title>Version 1.4.0</title>
+      <pubDate>Thu, 13 Aug 2026 09:22:00 +0000</pubDate>
+      <sparkle:version>5</sparkle:version>
+      <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
       <description><![CDATA[
         <ul>
-          <li>Automatic updates: Tood now checks for new versions in the background and lets you know when one's ready</li>
+          <li>Fixes an "error launching the installer" some people hit using v1.3.0's new automatic updates (a missing sandbox entitlement)</li>
         </ul>
       ]]></description>
       <enclosure
-        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.3.0/Tood.dmg"
-        sparkle:edSignature="0qoxQDUac83i0aL3XK4wIDylLE7k1kNxMRJUDC5J0KXrQzzgHv+Uub3jn/+61X5ZNxU+Gfw6bLI9mAmkJNfnBQ=="
-        length="3698679"
+        url="https://github.com/reneezhang99/to-do-app/releases/download/v1.4.0/Tood.dmg"
+        sparkle:edSignature="jlLzDa0ES11xxmoXZE4USGd8FeZUMZgbyHPArkJSylEulzOlIinYJYuRXOlupJ+gC3IR9FSWZhSFjkee0DyXDg=="
+        length="3698911"
         type="application/octet-stream" />
     </item>
   </channel>
