@@ -18,6 +18,7 @@ final class StickyManager {
 
     @ObservationIgnored private let persistence = PersistenceService()
     let archive = ArchiveService()
+    let stickyArchive = StickyArchiveService()
     @ObservationIgnored private var rollover: RolloverScheduler?
 
     @ObservationIgnored private var saveTimer: Timer?
@@ -71,6 +72,16 @@ final class StickyManager {
         controllers[id] = nil
         order.removeAll { $0 == id }
         scheduleSave()
+    }
+
+    /// Snapshots the sticky into `stickyArchive` — a full copy (title,
+    /// items, color, day) kept as a browsable memory — then removes it the
+    /// same way `remove(_:)` does. The close confirmation is what actually
+    /// decides archive vs. delete; this just also keeps a copy.
+    func archive(_ id: UUID) {
+        guard let model = controllers[id]?.model else { return }
+        stickyArchive.append(ArchivedSticky(id: model.id, data: model.snapshot(), archivedAt: Date()))
+        remove(id)
     }
 
     func showAll() { for c in controllers.values { c.show() } }

@@ -27,6 +27,7 @@ struct HomeView: View {
     @State private var locationLabel: String?
     @State private var journalHover = false
     @State private var addCardHover = false
+    @State private var showingArchive = false
 
     private let desk = Color(hex: 0xFBF8F1)
 
@@ -60,6 +61,9 @@ struct HomeView: View {
         .sheet(isPresented: $showingJournal) {
             JournalZenView(journal: journal, initialDay: journalInitialDay, onDone: { showingJournal = false })
         }
+        .sheet(isPresented: $showingArchive) {
+            ArchivedStickiesView(manager: manager, onDone: { showingArchive = false })
+        }
         .onAppear {
             LocationStamper.shared.requestLabel { locationLabel = $0 }
         }
@@ -82,8 +86,25 @@ struct HomeView: View {
                 .padding(.top, 8)
             }
             Spacer()
-            AgendaTimeline()
+            VStack(alignment: .trailing, spacing: 10) {
+                archiveButton
+                AgendaTimeline()
+            }
         }
+    }
+
+    /// Quiet, always-there — finished stickies you archived (instead of
+    /// deleted) from the close confirmation live here.
+    private var archiveButton: some View {
+        Button { showingArchive = true } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "archivebox")
+                Text("Archive")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
     }
 
     private var greeting: String {

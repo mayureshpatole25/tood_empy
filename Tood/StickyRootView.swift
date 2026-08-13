@@ -237,7 +237,7 @@ struct StickyRootView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                Button { controller.closeSticky() } label: {
+                Button { controller.requestClose() } label: {
                     Text("X")
                         .font(.custom("ABCStefanTrial-Simple", size: 16))
                         .foregroundStyle(color.ink.opacity(0.3))
@@ -245,6 +245,7 @@ struct StickyRootView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .help("Archives this sticky — or delete it for good")
             }
             Spacer()
         }
@@ -566,7 +567,7 @@ struct StickyRootView: View {
         }
         Divider()
         Button("New Sticky") { controller.requestNewSticky() }
-        Button("Delete Sticky", role: .destructive) { controller.closeSticky() }
+        Button("Archive or Delete Sticky…", role: .destructive) { controller.requestClose() }
     }
 
     // MARK: - Editing helpers

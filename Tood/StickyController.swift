@@ -70,7 +70,7 @@ final class StickyController: NSObject, NSWindowDelegate {
                 return nil
             }
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "d" {
-                self.closeSticky() // deletes it — closing a sticky is always a delete in this app
+                self.requestClose() // asks Archive/Delete/Cancel, same as the X button
                 return nil
             }
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v",
@@ -245,10 +245,25 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// unlike closing, this doesn't delete the sticky.
     func minimizeSticky() { panel.miniaturize(nil) }
 
-    func deleteSticky() { manager?.remove(model.id) }
-
-    /// Closing a sticky deletes it (it won't come back on reopen).
-    func closeSticky() { manager?.remove(model.id) }
+    /// Every way of closing a sticky (the X button, ⌘D, the context menu's
+    /// "Delete Sticky") routes through here rather than deleting outright —
+    /// same NSAlert pattern as the status menu's "Delete All", offering
+    /// Archive (keeps a full copy as a browsable memory) or Delete (gone
+    /// for good) instead of silently assuming which one you meant.
+    func requestClose() {
+        let alert = NSAlert()
+        alert.messageText = "Archive or delete this sticky?"
+        alert.informativeText = "Archiving keeps it as a memory you can look back on later. Deleting removes it for good — this can't be undone."
+        alert.addButton(withTitle: "Archive")
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons[1].hasDestructiveAction = true
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: manager?.archive(model.id)
+        case .alertSecondButtonReturn: manager?.remove(model.id)
+        default: break // Cancel
+        }
+    }
 
     // MARK: - NSWindowDelegate (frame sync)
 
