@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tood Downloads</title>
+<meta name="description" content="Total downloads of Tood.">
+<link rel="icon" href="assets/toodicon.png?v=2">
+<style>
+  @font-face {
+    font-family: "ABCStefanTrial";
+    src: url("assets/fonts/ABCStefanTrial-Simple.otf") format("opentype");
+    font-display: swap;
+  }
+  :root {
+    --ink: #1c1d1a;
+    --ink-soft: rgba(28,29,26,.6);
+    --accent: #17c862;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #fbfaf6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .wrap {
+    text-align: center;
+  }
+  .frog { width: 56px; height: 56px; margin-bottom: 8px; }
+  .label {
+    font-size: 15px;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .count {
+    font-family: "ABCStefanTrial", var(--font-display);
+    font-size: clamp(96px, 22vw, 220px);
+    line-height: 1;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    min-height: 1em;
+  }
+  .count.loading { color: var(--ink-soft); font-size: 28px; }
+  .back {
+    display: inline-block;
+    margin-top: 28px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+  }
+  .back:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="frog" src="assets/toodicon.png?v=2" alt="">
+  <div class="label">Total downloads</div>
+  <div class="count loading" id="count">…</div>
+  <a class="back" href="index.html">&larr; Back to Tood</a>
+</div>
+<script>
+  fetch("/api/download-count")
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var el = document.getElementById("count");
+      if (typeof data.count === "number") {
+        el.textContent = data.count.toLocaleString();
+        el.classList.remove("loading");
+      } else {
+        el.textContent = "N/A";
+        el.classList.remove("loading");
+      }
+    })
+    .catch(function () {
+      var el = document.getElementById("count");
+      el.textContent = "N/A";
+      el.classList.remove("loading");
+    });
+</script>
+</body>
+</html>

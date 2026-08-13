@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.manager.newSticky()
         }
         GlobalHotKeyManager.shared.reregister()
+        AnnouncementService.shared.checkForAnnouncement()
 
         if !AppSettings.shared.onboardingCompleted {
             // Don't let real floating stickies (a true first run's

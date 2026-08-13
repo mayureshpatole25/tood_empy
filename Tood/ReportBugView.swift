@@ -19,6 +19,7 @@ struct ReportBugView: View {
         Form {
             Section("What happened?") {
                 TextEditor(text: $text)
+                    .tint(.primary) // otherwise the cursor/selection inherits the app's green accent, jarring on this plain, neutral form
                     .frame(minHeight: 100)
                 Text("No need to include your email, this can't be replied to.")
                     .font(.caption)

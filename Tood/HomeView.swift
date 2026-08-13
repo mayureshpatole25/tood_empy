@@ -42,10 +42,12 @@ struct HomeView: View {
             PaperDotsBackground().ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
+                announcementBanner
                 topRow
                 Spacer(minLength: 24)
                 bottomRow
             }
+            .animation(.easeInOut(duration: 0.25), value: AnnouncementService.shared.current)
             .padding(.horizontal, 44)
             .padding(.top, 30)
             .padding(.bottom, 44)
@@ -73,6 +75,38 @@ struct HomeView: View {
         }
         .onAppear {
             LocationStamper.shared.requestLabel { locationLabel = $0 }
+        }
+    }
+
+    // MARK: - Announcement banner (see AnnouncementService)
+
+    @ViewBuilder
+    private var announcementBanner: some View {
+        if let announcement = AnnouncementService.shared.current {
+            HStack(spacing: 12) {
+                Text(announcement.message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: 0x20211E))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let urlString = announcement.url, let url = URL(string: urlString) {
+                    Link(announcement.linkLabel ?? "Learn more", destination: url)
+                        .font(.system(size: 13, weight: .medium))
+                }
+                Spacer(minLength: 12)
+                Button { AnnouncementService.shared.dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(hex: 0x94F48F).opacity(0.35), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .padding(.bottom, 20)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
