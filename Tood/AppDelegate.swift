@@ -1,12 +1,18 @@
 import AppKit
 import SwiftUI
 import CoreText
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var manager: StickyManager!
     private var journal: JournalStore!
     private var statusMenu: StatusMenuController!
+
+    /// Sparkle's own standard UI (a quiet "update available" prompt, not a
+    /// custom one) — background checks daily (SUScheduledCheckInterval),
+    /// downloads on demand, never installs without asking first.
+    private(set) var updaterController: SPUStandardUpdaterController!
 
     private var homeWindow: HostedWindowController<HomeView>?
     private var settingsWindow: HostedWindowController<SettingsView>?
@@ -32,6 +38,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerBundledFonts()
         manager = StickyManager()
         journal = JournalStore()
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         statusMenu = StatusMenuController(manager: manager, appDelegate: self)
         manager.restoreAll()
 
@@ -90,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // stale — an immediate one here makes reopening Home feel current
         // right away instead of waiting for the next tick.
         Task { await GoogleCalendarService.shared.refreshToday() }
+    }
+
+    /// The status menu's "Check for Updates…" — same feed/UI Sparkle's own
+    /// background checks use, just triggered on demand.
+    func checkForUpdates() {
+        updaterController.checkForUpdates(nil)
     }
 
     func showSettings() {

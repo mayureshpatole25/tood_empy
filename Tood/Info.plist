@@ -39,5 +39,13 @@
 			</array>
 		</dict>
 	</array>
+	<key>SUFeedURL</key>
+	<string>https://toodapp.com/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>NJxCeKpBO6OygchDbfaPI0It53ZF26E+c/nx50zdtdw=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>
