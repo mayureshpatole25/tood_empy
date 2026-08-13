@@ -245,7 +245,7 @@ struct StickyRootView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Archives this sticky — or delete it for good")
+                .help("Archives this sticky, or delete it for good")
             }
             Spacer()
         }

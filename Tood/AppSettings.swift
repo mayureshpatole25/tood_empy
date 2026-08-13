@@ -56,6 +56,13 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(titleSize.rawValue, forKey: Keys.titleSize) }
     }
 
+    /// What closing a sticky does (ask, or skip straight to archive/delete).
+    /// Settable here in Settings/the status menu, or from the close dialog's
+    /// own "Don't ask me again" checkbox.
+    var closeBehavior: StickyCloseBehavior {
+        didSet { UserDefaults.standard.set(closeBehavior.rawValue, forKey: Keys.closeBehavior) }
+    }
+
     private init() {
         let d = UserDefaults.standard
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
@@ -66,6 +73,7 @@ final class AppSettings {
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
         titleSize = d.string(forKey: Keys.titleSize).flatMap(StickyTitleSize.init(rawValue:)) ?? .medium
+        closeBehavior = d.string(forKey: Keys.closeBehavior).flatMap(StickyCloseBehavior.init(rawValue:)) ?? .alwaysAsk
     }
 
     private enum Keys {
@@ -77,5 +85,6 @@ final class AppSettings {
         static let journalLocation = "today.journalLocationEnabled"
         static let userName = "today.userName"
         static let titleSize = "today.titleSize"
+        static let closeBehavior = "today.closeBehavior"
     }
 }

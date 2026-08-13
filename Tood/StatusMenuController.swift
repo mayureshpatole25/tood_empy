@@ -72,6 +72,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         titleSizeItem.submenu = defaultTitleSizeMenu()
         menu.addItem(titleSizeItem)
 
+        let closeBehaviorItem = NSMenuItem(title: "When Closing a Sticky", action: nil, keyEquivalent: "")
+        closeBehaviorItem.submenu = closeBehaviorMenu()
+        menu.addItem(closeBehaviorItem)
+
         let positionItem = NSMenuItem(title: "New Sticky Position", action: nil, keyEquivalent: "")
         positionItem.submenu = startCornerMenu()
         menu.addItem(positionItem)
@@ -195,6 +199,27 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func setDefaultTitleSize(_ sender: NSMenuItem) {
         guard let size = sender.representedObject as? StickyTitleSize else { return }
         AppSettings.shared.titleSize = size
+    }
+
+    /// What closing a sticky does — same setting the close dialog's own
+    /// "Don't ask me again" checkbox can set in the moment.
+    private func closeBehaviorMenu() -> NSMenu {
+        let submenu = NSMenu()
+        let current = AppSettings.shared.closeBehavior
+        for behavior in StickyCloseBehavior.allCases {
+            let item = NSMenuItem(title: behavior.displayName, action: #selector(setCloseBehavior(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = behavior
+            item.state = behavior == current ? .on : .off
+            submenu.addItem(item)
+        }
+        return submenu
+    }
+
+    @objc private func setCloseBehavior(_ sender: NSMenuItem) {
+        guard let behavior = sender.representedObject as? StickyCloseBehavior else { return }
+        AppSettings.shared.closeBehavior = behavior
     }
 
     /// Which screen corner new stickies are tiled from.

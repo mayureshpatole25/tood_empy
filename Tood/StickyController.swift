@@ -246,22 +246,40 @@ final class StickyController: NSObject, NSWindowDelegate {
     func minimizeSticky() { panel.miniaturize(nil) }
 
     /// Every way of closing a sticky (the X button, ⌘D, the context menu's
-    /// "Delete Sticky") routes through here rather than deleting outright —
-    /// same NSAlert pattern as the status menu's "Delete All", offering
-    /// Archive (keeps a full copy as a browsable memory) or Delete (gone
-    /// for good) instead of silently assuming which one you meant.
+    /// "Delete Sticky") routes through here rather than deleting outright.
+    /// Respects `AppSettings.closeBehavior` first, so someone who'd rather
+    /// skip the dialog entirely (set from the status menu, or from the
+    /// dialog's own "Don't ask me again" checkbox below) never sees it.
+    /// Otherwise: same NSAlert pattern as the status menu's "Delete All",
+    /// offering Archive (keeps a full copy as a browsable memory) or Delete
+    /// (gone for good) instead of silently assuming which one you meant.
     func requestClose() {
+        switch AppSettings.shared.closeBehavior {
+        case .alwaysArchive: manager?.archive(model.id); return
+        case .alwaysDelete: manager?.remove(model.id); return
+        case .alwaysAsk: break
+        }
+
         let alert = NSAlert()
         alert.messageText = "Archive or delete this sticky?"
-        alert.informativeText = "Archiving keeps it as a memory you can look back on later. Deleting removes it for good — this can't be undone."
+        alert.informativeText = "Archiving keeps it as a memory you can look back on later. Deleting removes it for good, and can't be undone."
         alert.addButton(withTitle: "Archive")
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons[1].hasDestructiveAction = true
-        switch alert.runModal() {
-        case .alertFirstButtonReturn: manager?.archive(model.id)
-        case .alertSecondButtonReturn: manager?.remove(model.id)
-        default: break // Cancel
+        alert.showsSuppressionButton = true
+        alert.suppressionButton?.title = "Don't ask me again"
+
+        let response = alert.runModal()
+        let alwaysDoThis = alert.suppressionButton?.state == .on
+        switch response {
+        case .alertFirstButtonReturn:
+            manager?.archive(model.id)
+            if alwaysDoThis { AppSettings.shared.closeBehavior = .alwaysArchive }
+        case .alertSecondButtonReturn:
+            manager?.remove(model.id)
+            if alwaysDoThis { AppSettings.shared.closeBehavior = .alwaysDelete }
+        default: break // Cancel — leave closeBehavior alone either way
         }
     }
 

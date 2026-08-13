@@ -3,8 +3,9 @@ import SwiftUI
 /// Shared sizing so the fan layout math and the card itself never drift
 /// apart. Narrower/taller than the first pass — closer to the real
 /// floating sticky's portrait proportions (378×490-ish) instead of the
-/// landscape-ish 200×178 it started as.
-private enum DeskCardMetrics {
+/// landscape-ish 200×178 it started as. Not private — ArchivedStickiesView
+/// reuses these same numbers so its grid of mini stickies matches exactly.
+enum DeskCardMetrics {
     static let width: CGFloat = 178
     static let height: CGFloat = 200
     static let cornerRadius: CGFloat = 5
@@ -56,6 +57,12 @@ struct HomeView: View {
                 .padding(.horizontal, 44)
                 .padding(.bottom, 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+
+            // Same floating treatment, opposite corner.
+            archiveButton
+                .padding(.horizontal, 44)
+                .padding(.bottom, 44)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .frame(minWidth: 820, minHeight: 600)
         .sheet(isPresented: $showingJournal) {
@@ -86,15 +93,13 @@ struct HomeView: View {
                 .padding(.top, 8)
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 10) {
-                archiveButton
-                AgendaTimeline()
-            }
+            AgendaTimeline()
         }
     }
 
     /// Quiet, always-there — finished stickies you archived (instead of
-    /// deleted) from the close confirmation live here.
+    /// deleted) from the close confirmation live here. Floats in the
+    /// bottom-left corner, mirroring the journal button's bottom-right spot.
     private var archiveButton: some View {
         Button { showingArchive = true } label: {
             HStack(spacing: 6) {
@@ -310,11 +315,14 @@ struct HomeView: View {
 }
 
 /// One sticky on the desk — same paper color/type as the real sticky, sized
-/// up to be the clear focal point, with a "Pop out" hint that appears when
-/// hovering its corner specifically (not the whole card), foreshadowing the
-/// floating window it becomes when clicked.
+/// up to be the clear focal point, with a hover hint that appears when
+/// hovering its corner specifically (not the whole card). Defaults to "Pop
+/// out", foreshadowing the floating window it becomes when clicked — but
+/// ArchivedStickiesView reuses this exact card for its grid of memories,
+/// where clicking opens a read-only viewer instead, hence the override.
 struct StickyDeskCard: View {
     let model: StickyModel
+    var hoverHint: String = "Pop out"
     var onShow: () -> Void
 
     @State private var hovering = false
@@ -367,7 +375,7 @@ struct StickyDeskCard: View {
                 .offset(y: hovering ? -9 : 0)
 
                 if hoveringCorner {
-                    Text("Pop out")
+                    Text(hoverHint)
                         .font(.system(size: 10, weight: .medium))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)

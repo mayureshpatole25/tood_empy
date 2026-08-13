@@ -3,15 +3,19 @@ import SwiftUI
 
 /// A quiet, read-only browse of finished stickies — archived instead of
 /// deleted from the close confirmation, kept as a memory rather than living
-/// on your desktop. Each entry can still be permanently deleted from here,
-/// for actually cleaning up old ones.
+/// on your desktop. Shown as the exact same mini-sticky cards as the Home
+/// dashboard's fan (StickyDeskCard, reused as-is), so a memory looks like
+/// what it was. Tapping one opens a full-size, read-only view; hovering
+/// reveals a trash icon to permanently delete it, for actually cleaning up.
 struct ArchivedStickiesView: View {
     let manager: StickyManager
     var onDone: () -> Void
 
     @State private var entries: [ArchivedSticky] = []
+    @State private var viewing: ArchivedSticky?
 
     private let desk = Color(hex: 0xFBF8F1)
+    private let columns = [GridItem(.adaptive(minimum: DeskCardMetrics.width + 24), spacing: 24)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,12 +23,15 @@ struct ArchivedStickiesView: View {
             if entries.isEmpty {
                 emptyState
             } else {
-                list
+                grid
             }
         }
-        .frame(width: 480, height: 560)
+        .frame(width: 640, height: 560)
         .background(desk)
         .onAppear { reload() }
+        .sheet(item: $viewing) { entry in
+            ArchivedStickyDetailView(model: StickyModel(data: entry.data), onDone: { viewing = nil })
+        }
     }
 
     private var header: some View {
@@ -55,59 +62,53 @@ struct ArchivedStickiesView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var list: some View {
+    private var grid: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 28) {
                 ForEach(entries) { entry in
-                    row(entry)
+                    card(entry)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(20)
         }
     }
 
-    private func row(_ entry: ArchivedSticky) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(entry.data.colorID.paper)
-                .frame(width: 10)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.data.title.isEmpty ? "To Do" : entry.data.title)
-                    .font(.system(size: 15, weight: .medium))
-                Text(itemsSummary(entry))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                Text(Self.dateFormatter.string(from: entry.archivedAt))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary.opacity(0.7))
-            }
-
-            Spacer()
-
+    private func card(_ entry: ArchivedSticky) -> some View {
+        // Each entry gets its own throwaway StickyModel purely for display —
+        // StickyDeskCard already renders exactly what a real sticky looks
+        // like, so reusing it here guarantees a memory actually looks like
+        // one instead of a second, drifting copy of the same styling.
+        let model = StickyModel(data: entry.data)
+        return VStack(spacing: 6) {
+            StickyDeskCard(model: model, hoverHint: "View") { viewing = entry }
+            Text(Self.dateFormatter.string(from: entry.archivedAt))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .overlay(alignment: .topLeading) {
             Button { requestDelete(entry) } label: {
                 Image(systemName: "trash")
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, height: 22)
+                    .background(.black.opacity(0.55), in: Circle())
             }
             .buttonStyle(.plain)
+            .padding(6)
+            .opacity(cardHover[entry.id] == true ? 1 : 0)
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black.opacity(0.03)))
+        .onHover { cardHover[entry.id] = $0 }
     }
 
-    private func itemsSummary(_ entry: ArchivedSticky) -> String {
-        let items = entry.data.items.filter { !$0.text.isEmpty }
-        guard !items.isEmpty else { return "No items" }
-        let done = items.filter { $0.isDone }.count
-        return "\(done)/\(items.count) done"
-    }
+    // Keyed on id rather than a single shared @State so each card's trash
+    // icon only reveals on its own hover, not whichever was hovered last.
+    @State private var cardHover: [UUID: Bool] = [:]
 
     private func requestDelete(_ entry: ArchivedSticky) {
         let alert = NSAlert()
         alert.messageText = "Delete this memory for good?"
         let title = entry.data.title.isEmpty ? "To Do" : entry.data.title
-        alert.informativeText = "\"\(title)\" will be gone for good — this can't be undone."
+        alert.informativeText = "\"\(title)\" will be gone for good, and can't be undone."
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.buttons.first?.hasDestructiveAction = true
