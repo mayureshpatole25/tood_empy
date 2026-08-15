@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tood Support</title>
+<link rel="icon" href="assets/toodicon.png?v=2">
+<style>
+  :root {
+    --ink: #1c1d1a;
+    --ink-soft: rgba(28,29,26,.7);
+    --accent: #17c862;
+    --border: rgba(28,29,26,.12);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background: #fbfaf6;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 64px 24px 96px; }
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    margin-bottom: 28px;
+  }
+  .back:hover { color: var(--ink); }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+  header img { width: 36px; height: 36px; border-radius: 10px; }
+  h1 { font-size: 28px; margin: 0; letter-spacing: -0.01em; }
+  .lede { font-size: 15px; color: var(--ink-soft); margin: 6px 0 40px; max-width: 46ch; }
+  h2 { font-size: 17px; margin: 40px 0 10px; letter-spacing: -0.01em; }
+  p, li { font-size: 15px; color: var(--ink-soft); }
+  ul { padding-left: 20px; margin: 10px 0; }
+  li { margin-bottom: 6px; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin: 20px 0;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .card .label { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); margin: 0 0 4px; }
+  .card .email { font-size: 17px; font-weight: 600; margin: 0; }
+  .card .note { font-size: 13px; color: var(--ink-soft); margin: 0; }
+  .qa { border-top: 1px solid var(--border); padding: 20px 0; }
+  .qa:last-child { border-bottom: 1px solid var(--border); }
+  .qa h2 { margin: 0 0 8px; }
+  .qa p { margin: 0; max-width: 56ch; }
+  footer {
+    margin-top: 56px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="index.html">&larr; Back to Tood</a>
+    <header>
+      <img src="assets/toodicon.png?v=2" alt="">
+      <h1>Support</h1>
+    </header>
+    <p class="lede">Tood is a native macOS app for sticky-note to‑dos and journaling, made by Renee Zhang. Questions, bugs, or feedback — reach a real person below, or check the answers we're asked most.</p>
+
+    <div class="card">
+      <div>
+        <p class="label">Email support</p>
+        <p class="email"><a href="mailto:support@toodapp.com">support@toodapp.com</a></p>
+      </div>
+      <p class="note">We reply within 1–2 business days.</p>
+    </div>
+
+    <div class="qa">
+      <h2>Where do my to-dos and journal entries live?</h2>
+      <p>Tood is local‑first: everything you create — sticky notes, checklist items, journal entries — is stored in local app storage on your Mac. Nothing is uploaded to a server we run.</p>
+    </div>
+
+    <div class="qa">
+      <h2>Does Tood sync between multiple Macs?</h2>
+      <p>Not currently. Since your data lives on-device, notes and journal entries created on one Mac won't appear on another. Everything stays exactly where you left it on that machine.</p>
+    </div>
+
+    <div class="qa">
+      <h2>What does connecting Google Calendar do?</h2>
+      <p>Tood requests read-only access to show your upcoming events alongside your to‑dos. The connection token is stored securely in your Mac's Keychain, never on our servers, and you can disconnect any time from Tood's settings.</p>
+    </div>
+
+    <div class="qa">
+      <h2>How do color pack purchases work?</h2>
+      <p>Optional packs like Candy are one-time purchases processed by Polar. Tood never sees or stores your card details — Polar handles checkout and issues a license key that unlocks the pack.</p>
+    </div>
+
+    <div class="qa">
+      <h2>How do I delete my data?</h2>
+      <p>Delete it anytime from Tood's Settings, or remove the app entirely — both clear your local data. Disconnecting Google Calendar immediately removes the stored token from Keychain.</p>
+    </div>
+
+    <div class="qa">
+      <h2>I found a bug. How do I report it?</h2>
+      <p>Email <a href="mailto:support@toodapp.com">support@toodapp.com</a> with what you were doing, what you expected, and what happened instead. A screenshot helps a lot if you can attach one.</p>
+    </div>
+
+    <footer>
+      See also the <a href="privacy.html">Privacy Policy</a>. For anything not covered here, email <a href="mailto:support@toodapp.com">support@toodapp.com</a>.<br>
+      Tood, made by Renee
+    </footer>
+  </div>
+</body>
+</html>
