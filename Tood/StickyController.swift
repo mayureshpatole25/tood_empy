@@ -85,6 +85,25 @@ final class StickyController: NSObject, NSWindowDelegate {
                 }
             }
 
+            // Cross the title/first-row boundary with left/right only when
+            // the caret is already at the corresponding text boundary.
+            if event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+               let editor = self.panel.firstResponder as? NSTextView,
+               editor.selectedRange().length == 0 {
+                let caret = editor.selectedRange().location
+                let length = (editor.string as NSString).length
+                if event.keyCode == 124, self.model.isTitleFocused, caret == length {
+                    self.model.onRequestFirstItemFocus?()
+                    return nil
+                }
+                if event.keyCode == 123,
+                   self.model.focusedItemID == self.model.orderedItems.first?.id,
+                   caret == 0 {
+                    self.model.onRequestTitleFocus?()
+                    return nil
+                }
+            }
+
             guard event.keyCode == 51 /* delete */,
                   let id = self.model.focusedItemID,
                   let item = self.model.items.first(where: { $0.id == id }),

@@ -40,6 +40,7 @@ final class StickyModel: Identifiable {
     /// Mirrors the SwiftUI `@FocusState` so AppKit-level key handling (which
     /// can't see FocusState) knows which row is focused. Not persisted.
     @ObservationIgnored var focusedItemID: UUID?
+    @ObservationIgnored var isTitleFocused = false
 
     /// Set by the view; invoked by the window's key monitor when backspace is
     /// pressed on an empty/whitespace-only row (SwiftUI's TextField swallows
@@ -52,6 +53,8 @@ final class StickyModel: Identifiable {
     /// first thing worth typing into — SwiftUI's `@FocusState` isn't visible
     /// from the AppKit-level controller, so this is the same bridge pattern.
     @ObservationIgnored var onRequestFocus: (() -> Void)?
+    @ObservationIgnored var onRequestTitleFocus: (() -> Void)?
+    @ObservationIgnored var onRequestFirstItemFocus: (() -> Void)?
 
     /// Set by the view; invoked by the window's key monitor when ⌘V pastes
     /// multi-line text — same bridge pattern, since focusing the resulting
