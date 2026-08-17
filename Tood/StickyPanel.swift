@@ -24,10 +24,13 @@ final class StickyPanel: NSWindow {
             defer: false
         )
         level = .normal
-        // .canJoinAllSpaces alone was still showing up over another app's
-        // full-screen Space (e.g. full-screen YouTube) — .fullScreenNone
-        // explicitly opts the window out of full-screen Spaces entirely.
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
+        // Keep each sticky attached to the desktop Space where it was
+        // opened. `.canJoinAllSpaces` made every sticky follow the user
+        // during a four-finger Space swipe, which was both distracting and
+        // contrary to normal macOS window behavior. `.managed` lets Mission
+        // Control own placement while `.fullScreenNone` keeps stickies out
+        // of another app's full-screen Space.
+        collectionBehavior = [.managed, .fullScreenNone]
 
         isOpaque = false
         backgroundColor = .clear
