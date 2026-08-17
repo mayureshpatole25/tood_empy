@@ -8,6 +8,7 @@ struct StickyRootView: View {
     unowned let controller: StickyController
 
     @FocusState private var focusedID: UUID?
+    @FocusState private var titleFocused: Bool
     @State private var hovering = false
     @State private var showColors = false
     @State private var showFonts = false
@@ -90,6 +91,14 @@ struct StickyRootView: View {
             model.onRequestFocus = {
                 focusedID = model.items.first(where: { !$0.isDone })?.id ?? model.items.first?.id
             }
+            model.onRequestTitleFocus = {
+                focusedID = nil
+                titleFocused = true
+            }
+            model.onRequestFirstItemFocus = {
+                titleFocused = false
+                focusedID = model.items.first?.id
+            }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
                     focusedID = lastID
@@ -97,6 +106,7 @@ struct StickyRootView: View {
             }
         }
         .onChange(of: focusedID) { _, new in model.focusedItemID = new }
+        .onChange(of: titleFocused) { _, new in model.isTitleFocused = new }
     }
 
     /// The flat paper itself.
@@ -170,6 +180,11 @@ struct StickyRootView: View {
                 .lineLimit(1...3)
                 .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
                 .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                .onKeyPress(.downArrow) {
+                    model.onRequestFirstItemFocus?()
+                    return .handled
+                }
+                .focused($titleFocused)
                 .padding(.trailing, 6) // headroom for negative tracking on the last glyph
                 .frame(width: titleWidth, alignment: .topLeading)
         }
@@ -588,6 +603,10 @@ struct StickyRootView: View {
     private func moveFocus(from item: TodoItem, by delta: Int) {
         let ordered = model.orderedItems
         guard let idx = ordered.firstIndex(where: { $0.id == item.id }) else { return }
+        if idx == 0, delta < 0 {
+            model.onRequestTitleFocus?()
+            return
+        }
         let target = idx + delta
         guard ordered.indices.contains(target) else { return }
         focusedID = ordered[target].id
