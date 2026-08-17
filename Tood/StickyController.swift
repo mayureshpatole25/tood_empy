@@ -27,16 +27,13 @@ final class StickyController: NSObject, NSWindowDelegate {
         panel.contentView = hosting
         panel.delegate = self
 
-        // Persist on any model mutation (debounced by the manager), and
-        // re-check whether the content now needs a taller window. Deferred a
-        // tick so SwiftUI has actually re-laid-out the new content first.
-        model.onChange = { [weak self, weak manager] in
+        // Persist on any model mutation. Checklist overflow is handled by
+        // its own scroll view, so typing never changes the window's size.
+        model.onChange = { [weak manager] in
             manager?.scheduleSave()
-            DispatchQueue.main.async { self?.growToFitCurrentContent() }
         }
 
         if model.isVisible { show() }
-        growToFitCurrentContent() // in case a restored sticky already overflows
 
         // Same NSHostingView restore glitch as the main window (see
         // HostedWindowController) — force a layout pass after the genie
