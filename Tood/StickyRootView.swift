@@ -261,25 +261,28 @@ struct StickyRootView: View {
     /// Rows actually rendered. Reserves one slot for the toggle row itself
     /// when something's hidden, so the toggle doesn't itself overflow.
     private var visibleItems: [TodoItem] {
-        let all = model.orderedItems
-        guard all.count > visibleRowCapacity else { return all }
-        return Array(all.prefix(max(1, visibleRowCapacity - 1)))
+        model.orderedItems
     }
 
     private var checklist: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(visibleItems) { item in
-                row(item)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(visibleItems) { item in
+                        row(item).id(item.id)
+                    }
+                    addRowButton
+                }
             }
-            addRowButton
-            toggleIfNeeded
+            .scrollIndicators(.automatic)
+            .onChange(of: focusedID) { _, id in
+                guard let id else { return }
+                withAnimation(.easeOut(duration: 0.16)) {
+                    proxy.scrollTo(id, anchor: .center)
+                }
+            }
         }
-        // No `.animation(value: model.items)` here — the checkbox's own
-        // `withAnimation` at the toggle call site is the single source of
-        // truth for that motion. Layering both made the reorder read as
-        // muddled/inelegant instead of one clean row (text + its divider)
-        // sliding to its new spot.
-        .animation(.snappy(duration: 0.3), value: availableHeight)
+        .frame(maxHeight: .infinity)
     }
 
     /// "N more" while something's hidden by the current size; once
@@ -310,7 +313,6 @@ struct StickyRootView: View {
         if hidden == 0 {
             Button {
                 let newID = model.addItem()
-                revealIfHidden()
                 focusedID = newID
             } label: {
                 HStack(spacing: 19) {
@@ -571,17 +573,7 @@ struct StickyRootView: View {
     private func submit(_ item: TodoItem) {
         guard !isBlank(bindingValue(item)) else { return }
         let newID = model.addItem(after: item)
-        revealIfHidden()
         focusedID = newID
-    }
-
-    /// A newly-created row past the current capacity wouldn't be rendered,
-    /// so FocusState would point at nothing and keystrokes would silently
-    /// land back in the last visible field instead. Grow by one row so it's
-    /// actually there.
-    private func revealIfHidden() {
-        guard model.orderedItems.count > visibleRowCapacity else { return }
-        controller.growBy(rows: 1, estimatedRowHeight: rowHeightEstimate)
     }
 
     /// Up/down arrow jumps focus to the adjacent row — same convention as
@@ -614,7 +606,6 @@ struct StickyRootView: View {
         if value == "-" {
             model.setText(item.id, "")
             let newID = model.addItem(after: item)
-            revealIfHidden()
             focusedID = newID
         }
     }
