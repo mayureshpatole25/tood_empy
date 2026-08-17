@@ -360,7 +360,7 @@ struct StickyRootView: View {
                     // running off to the right. Enter handled below; backspace
                     // on an empty row is caught by the window's key monitor
                     // (StickyController) since TextField swallows .delete.
-                    TextField("", text: textBinding(item), axis: .vertical)
+                    TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
                         .textFieldStyle(.plain)
                         .font(bodyFont(14))
                         .foregroundStyle(color.ink.opacity(0.8))
@@ -382,6 +382,9 @@ struct StickyRootView: View {
                             moveFocus(from: item, by: 1)
                             return .handled
                         }
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture { focusedID = item.id }
                         .transition(.identity)
                 }
             }
@@ -629,6 +632,15 @@ struct StickyRootView: View {
             get: { model.items.first { $0.id == item.id }?.text ?? "" },
             set: { model.setText(item.id, $0) }
         )
+    }
+
+    /// The first blank row should look and behave like an invitation to
+    /// type, rather than an invisible one-character click target.
+    private func rowPrompt(_ item: TodoItem) -> Text? {
+        guard item.id == model.orderedItems.first?.id,
+              bindingValue(item).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return Text("Add a to-do…").foregroundStyle(color.ink.opacity(0.32))
     }
 
     private func bodyFont(_ size: CGFloat) -> Font {
