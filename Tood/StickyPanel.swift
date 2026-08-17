@@ -12,10 +12,9 @@ final class StickyPanel: NSWindow {
 
     /// Shared with `StickyHostingView`'s cursor rects so the visible resize
     /// cursor and the actual draggable zone never drift apart.
-    static let resizeEdge: CGFloat = 16
+    static let resizeEdge: CGFloat = 8
     private let edge: CGFloat = StickyPanel.resizeEdge
     private let resizeMin = NSSize(width: 220, height: 300)
-    private var resizeSession: ResizeSession?
 
     init(frame: NSRect) {
         super.init(
@@ -49,33 +48,10 @@ final class StickyPanel: NSWindow {
         static let top = Zone(rawValue: 8)
     }
 
-    private struct ResizeSession {
-        let zone: Zone
-        let frame: NSRect
-        let mouse: NSPoint
-    }
-
     override func sendEvent(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDown:
-            let point = contentView?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
-            if let zone = resizeZone(at: point) {
-                resizeSession = ResizeSession(zone: zone, frame: frame, mouse: NSEvent.mouseLocation)
-                return // don't let the resize gesture become a background drag
-            }
-        case .leftMouseDragged:
-            if let session = resizeSession {
-                updateResize(session, mouse: NSEvent.mouseLocation)
-                return
-            }
-        case .leftMouseUp:
-            if let session = resizeSession {
-                updateResize(session, mouse: NSEvent.mouseLocation)
-                resizeSession = nil
-                return
-            }
-        default:
-            break
+        if event.type == .leftMouseDown, let zone = resizeZone(at: event.locationInWindow) {
+            performResize(zone: zone)
+            return // consume — don't let it start a background drag or hit a control
         }
         super.sendEvent(event)
     }
@@ -84,36 +60,40 @@ final class StickyPanel: NSWindow {
         guard let cv = contentView else { return nil }
         let b = cv.bounds
         var z: Zone = []
-        if p.x <= b.minX + edge { z.insert(.left) }
-        if p.x >= b.maxX - edge { z.insert(.right) }
-        if p.y <= b.minY + edge { z.insert(.bottom) }
-        if p.y >= b.maxY - edge { z.insert(.top) }
+        if p.x <= edge { z.insert(.left) }
+        if p.x >= b.width - edge { z.insert(.right) }
+        if p.y <= edge { z.insert(.bottom) }       // window coords: y=0 at bottom
+        if p.y >= b.height - edge { z.insert(.top) }
         return z.isEmpty ? nil : z
     }
 
-    private func updateResize(_ session: ResizeSession, mouse: NSPoint) {
-        let dx = mouse.x - session.mouse.x
-        let dy = mouse.y - session.mouse.y
-        let start = session.frame
-        var next = start
+    private func performResize(zone: Zone) {
+        let startFrame = frame
+        let startMouse = NSEvent.mouseLocation
+        while let e = nextEvent(matching: [.leftMouseUp, .leftMouseDragged]) {
+            if e.type == .leftMouseUp { break }
+            let cur = NSEvent.mouseLocation
+            let dx = cur.x - startMouse.x
+            let dy = cur.y - startMouse.y
+            var f = startFrame
 
-        if session.zone.contains(.right) {
-            next.size.width = max(resizeMin.width, start.width + dx)
+            if zone.contains(.right) {
+                f.size.width = max(resizeMin.width, startFrame.width + dx)
+            }
+            if zone.contains(.left) {
+                let newW = max(resizeMin.width, startFrame.width - dx)
+                f.origin.x = startFrame.maxX - newW
+                f.size.width = newW
+            }
+            if zone.contains(.top) {
+                f.size.height = max(resizeMin.height, startFrame.height + dy)
+            }
+            if zone.contains(.bottom) {
+                let newH = max(resizeMin.height, startFrame.height - dy)
+                f.origin.y = startFrame.maxY - newH
+                f.size.height = newH
+            }
+            setFrame(f, display: true)
         }
-        if session.zone.contains(.left) {
-            let width = max(resizeMin.width, start.width - dx)
-            next.origin.x = start.maxX - width
-            next.size.width = width
-        }
-        if session.zone.contains(.top) {
-            next.size.height = max(resizeMin.height, start.height + dy)
-        }
-        if session.zone.contains(.bottom) {
-            let height = max(resizeMin.height, start.height - dy)
-            next.origin.y = start.maxY - height
-            next.size.height = height
-        }
-
-        setFrame(next, display: true, animate: false)
     }
 }

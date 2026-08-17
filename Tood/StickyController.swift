@@ -231,9 +231,13 @@ final class StickyController: NSObject, NSWindowDelegate {
 
 /// Adds a resize cursor along the sticky's draggable edges. Plain
 /// `NSHostingView` doesn't manage cursor rects at all, and AppKit only
-/// recomputes them when it feels like it. Forcing an invalidation on every
-/// layout pass keeps the cursor regions aligned with the larger resize zones
-/// while the window changes size.
+/// recomputes them when it feels like it — after a *programmatic* resize
+/// (`growBy`/`collapse`, not a live mouse drag) the old rects, sized for
+/// the sticky's previous bounds, were left standing: the resize cursor
+/// silently stopped appearing past wherever the sticky's height last
+/// changed by hand, even though `StickyPanel`'s own hit-testing (computed
+/// fresh on every click) kept resizing just fine. Forcing an invalidation
+/// on every layout pass keeps the two in sync.
 final class StickyHostingView: NSHostingView<StickyRootView> {
     override func resetCursorRects() {
         super.resetCursorRects()

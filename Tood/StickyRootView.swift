@@ -34,7 +34,6 @@ struct StickyRootView: View {
             content
             bottomToolbar
             topRightButtons
-            resizeHandles
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         // A `.background` GeometryReader reads the window's current width
@@ -226,39 +225,6 @@ struct StickyRootView: View {
         .padding(.trailing, 14)
         .opacity(hovering ? 1 : 0)
         .animation(.easeInOut(duration: 0.15), value: hovering)
-    }
-
-    /// Borderless windows have no native frame to advertise resizing. These
-    /// subtle grips make all four draggable edges discoverable without
-    /// stealing pointer events from the larger 16-point resize zones.
-    private var resizeHandles: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .stroke(color.ink.opacity(hovering ? 0.18 : 0.07), lineWidth: 1)
-                .padding(1)
-
-            VStack {
-                Capsule()
-                    .frame(width: 44, height: 4)
-                Spacer(minLength: 0)
-                Capsule()
-                    .frame(width: 44, height: 4)
-            }
-            .padding(.vertical, 5)
-
-            HStack {
-                Capsule()
-                    .frame(width: 4, height: 44)
-                Spacer(minLength: 0)
-                Capsule()
-                    .frame(width: 4, height: 44)
-            }
-            .padding(.horizontal, 5)
-        }
-        .foregroundStyle(color.ink.opacity(hovering ? 0.32 : 0.11))
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-        .animation(.easeInOut(duration: 0.12), value: hovering)
     }
 
     // MARK: - Checklist
