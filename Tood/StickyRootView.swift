@@ -13,10 +13,7 @@ struct StickyRootView: View {
     @State private var showFonts = false
     @State private var paywallPack: ColorPack?
     private var packStore: ColorPackStore { ColorPackStore.shared }
-    /// The window's current available height, tracked live so the collapse
-    /// threshold below stays in sync as the sticky is dragged bigger/smaller.
-    @State private var availableHeight: CGFloat = 490
-    /// Same idea, width — the title needs it (see `header`) without a local
+    /// The window's current width — the title needs it (see `header`) without a local
     /// `GeometryReader` forcing a fixed height on it. A previous version
     /// used a `titleWraps` heuristic (does the whole title fit on one line?)
     /// to pick between a 58pt/108pt box, on the assumption that "doesn't fit
@@ -29,23 +26,6 @@ struct StickyRootView: View {
     @State private var availableWidth: CGFloat = 378
 
     private let corner: CGFloat = 4
-    /// Estimates for how many rows currently fit — not pixel-precise (rows
-    /// can wrap), but `StickyController.recheckContentSize()` snaps the
-    /// window to the exact fit right after, so small errors self-correct.
-    /// Matches the checkbox's 34pt-tall click target (see `checkbox(_:)`)
-    /// plus the row's 6+6 vertical padding and 1pt divider — stale here
-    /// after that target was made taller was exactly what caused a visible
-    /// double-snap on "Show less"/"N more" for longer lists, since every
-    /// row's error compounded across the whole list.
-    private let rowHeightEstimate: CGFloat = 47
-    /// Assumes a two-line title, since the title itself is intrinsically
-    /// sized now (see `header`) rather than a fixed/guessed height — an
-    /// overestimate on a one-line title, same as this already tolerates
-    /// being off in either direction (the doc comment above).
-    private let chromeHeightEstimate: CGFloat = 254 // date line + title block + spacer + top/bottom padding
-    /// Where "Show less" collapses back down to.
-    private let defaultCollapsedRows = 6
-
     private var color: StickyColor { model.color }
 
     var body: some View {
@@ -56,8 +36,8 @@ struct StickyRootView: View {
             topRightButtons
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        // A `.background` GeometryReader reads the window's current height
-        // for the fluid collapse threshold below without becoming the root
+        // A `.background` GeometryReader reads the window's current width
+        // without becoming the root
         // of the view tree — a GeometryReader as body's *root* (tried
         // earlier) has no well-defined ideal size of its own, which broke
         // NSHostingView.fittingSize for every other piece of sizing logic.
@@ -65,11 +45,9 @@ struct StickyRootView: View {
             GeometryReader { proxy in
                 Color.clear
                     .onAppear {
-                        availableHeight = proxy.size.height
                         availableWidth = proxy.size.width
                     }
                     .onChange(of: proxy.size) { _, newSize in
-                        availableHeight = newSize.height
                         availableWidth = newSize.width
                     }
             }
@@ -251,24 +229,14 @@ struct StickyRootView: View {
 
     // MARK: - Checklist
 
-    /// How many rows fit in the window's *current* height — purely a
-    /// function of `availableHeight`, so dragging the sticky bigger/smaller
-    /// immediately changes how many rows show and how big "N more" reads.
-    private var visibleRowCapacity: Int {
-        max(1, Int((availableHeight - chromeHeightEstimate) / rowHeightEstimate))
-    }
-
-    /// Rows actually rendered. Reserves one slot for the toggle row itself
-    /// when something's hidden, so the toggle doesn't itself overflow.
-    private var visibleItems: [TodoItem] {
-        model.orderedItems
-    }
-
+    /// Uses whatever vertical room the resized sticky leaves below the
+    /// header. Every item remains available; overflow scrolls inside this
+    /// area instead of being replaced by "N more" / "Show less".
     private var checklist: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(visibleItems) { item in
+                    ForEach(model.orderedItems) { item in
                         row(item).id(item.id)
                     }
                     addRowButton
@@ -285,63 +253,24 @@ struct StickyRootView: View {
         .frame(maxHeight: .infinity)
     }
 
-    /// "N more" while something's hidden by the current size; once
-    /// everything fits, "Show less" offers to shrink back to a compact
-    /// default (only if the list is actually longer than that default).
-    @ViewBuilder
-    private var toggleIfNeeded: some View {
-        let total = model.orderedItems.count
-        let hidden = total - visibleItems.count
-        if hidden > 0 {
-            toggleButton(label: "\(hidden) more", systemImage: "chevron.down") {
-                controller.growBy(rows: hidden, estimatedRowHeight: rowHeightEstimate)
-            }
-        } else if total > defaultCollapsedRows {
-            toggleButton(label: "Show less", systemImage: "chevron.up") {
-                controller.collapse(toRows: defaultCollapsedRows,
-                                    rowHeight: rowHeightEstimate, chromeHeight: chromeHeightEstimate)
-            }
-        }
-    }
-
-    /// Always-there "next row," so starting a new line never requires
-    /// clicking into an existing one first. Hidden when "N more" is already
-    /// showing — no room to invite yet another row on top of that.
-    @ViewBuilder
+    /// Always-there "next row," kept in the same scrollable checklist.
     private var addRowButton: some View {
-        let hidden = model.orderedItems.count - visibleItems.count
-        if hidden == 0 {
-            Button {
-                let newID = model.addItem()
-                focusedID = newID
-            } label: {
-                HStack(spacing: 19) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(color.ink.opacity(0.32))
-                        .frame(width: 24, height: 24)
-                    Text("Add item")
-                        .font(bodyFont(13))
-                        .foregroundStyle(color.ink.opacity(0.32))
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func toggleButton(label: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
+        Button {
+            let newID = model.addItem()
+            focusedID = newID
+        } label: {
+            HStack(spacing: 19) {
+                Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
-                Text(label)
-                    .font(bodyFont(12))
+                    .foregroundStyle(color.ink.opacity(0.32))
+                    .frame(width: 24, height: 24)
+                Text("Add item")
+                    .font(bodyFont(13))
+                    .foregroundStyle(color.ink.opacity(0.32))
+                Spacer(minLength: 0)
             }
-            .foregroundStyle(color.ink.opacity(0.5))
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
