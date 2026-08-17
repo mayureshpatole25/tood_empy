@@ -11,11 +11,10 @@ enum DeskCardMetrics {
     static let cornerRadius: CGFloat = 5
 }
 
-/// The Home screen: greeting + quiet agenda up top, stickies (the real
-/// product) fanned out bottom-left, a single pen button for the journal,
-/// bottom-right. No chrome at all — settings lives in the status-bar menu
-/// (set up once during onboarding), and a new sticky is ⌘N (or the
-/// configurable global shortcut) rather than a dedicated button here.
+/// The Home screen: greeting up top, today's completion ring opposite it,
+/// the intentionally messy sticky fan bottom-left, and a direct new-list
+/// action bottom-right. No chrome at all — settings lives in the status-bar
+/// menu set up during onboarding.
 ///
 /// Reads directly off `StickyManager`/`JournalStore` (the same source of
 /// truth the floating stickies and journal itself use), so it updates live.
@@ -23,10 +22,7 @@ struct HomeView: View {
     let manager: StickyManager
     let journal: JournalStore
 
-    @State private var showingJournal = false
-    @State private var journalInitialDay: Date?
     @State private var locationLabel: String?
-    @State private var journalHover = false
     @State private var addCardHover = false
     @State private var showingArchive = false
 
@@ -52,10 +48,9 @@ struct HomeView: View {
             .padding(.top, 30)
             .padding(.bottom, 44)
 
-            // Floats independently of the fan/pill column below so it
-            // always stays put in the corner regardless of how tall the
-            // fan or the focus pill's row end up being.
-            journalButton
+            // Floats independently of the fan/pill column below so the
+            // primary creation action always stays in the same corner.
+            newToDoListButton
                 .padding(.horizontal, 44)
                 .padding(.bottom, 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
@@ -67,9 +62,6 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .frame(minWidth: 820, minHeight: 600)
-        .sheet(isPresented: $showingJournal) {
-            JournalZenView(journal: journal, initialDay: journalInitialDay, onDone: { showingJournal = false })
-        }
         .sheet(isPresented: $showingArchive) {
             ArchivedStickiesView(manager: manager, onDone: { showingArchive = false })
         }
@@ -110,7 +102,7 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Top: greeting (+ quiet location) and the agenda
+    // MARK: - Top: greeting (+ quiet location) and daily progress
 
     private var topRow: some View {
         HStack(alignment: .top) {
@@ -120,15 +112,46 @@ struct HomeView: View {
                 Text(dateLine)
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
-                InsightStatView(manager: manager, journal: journal) { day in
-                    journalInitialDay = day
-                    showingJournal = true
-                }
-                .padding(.top, 8)
             }
             Spacer()
-            AgendaTimeline()
+            dailyProgressRing
         }
+    }
+
+    private var completedCount: Int { manager.tasksCompletedToday }
+    private var totalTaskCount: Int { completedCount + manager.unfinishedTaskCount }
+    private var completionProgress: Double {
+        guard totalTaskCount > 0 else { return 0 }
+        return min(1, Double(completedCount) / Double(totalTaskCount))
+    }
+
+    /// The full track is the day's total workload; the green arc is the
+    /// completed share. The numbers remain explicit so progress is never
+    /// communicated by color alone.
+    private var dailyProgressRing: some View {
+        ZStack {
+            Circle()
+                .stroke(Color(hex: 0x20211E).opacity(0.12), lineWidth: 7)
+            Circle()
+                .trim(from: 0, to: completionProgress)
+                .stroke(
+                    Color(hex: 0x17C862),
+                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+
+            VStack(spacing: -1) {
+                Text("\(completedCount)")
+                    .font(.custom("HelveticaNeue-Medium", size: 22))
+                Text("of \(totalTaskCount)")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 82, height: 82)
+        .animation(.easeInOut(duration: 0.25), value: completionProgress)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(completedCount) of \(totalTaskCount) to-do items done")
     }
 
     /// Quiet, always-there — finished stickies you archived (instead of
@@ -168,7 +191,7 @@ struct HomeView: View {
     }
 
     // MARK: - Bottom: stickies, then the focus pill centered underneath
-    // (the journal button floats independently, see `body`)
+    // (the new-list button floats independently, see `body`)
 
     private var bottomRow: some View {
         VStack(spacing: 14) {
@@ -319,26 +342,23 @@ struct HomeView: View {
         [8, 16, 4, 12, 6][index % 5] // modest stagger
     }
 
-    private var journalButton: some View {
-        HStack(spacing: 12) {
-            Text("Add journal entry")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .opacity(journalHover ? 1 : 0)
-                .offset(x: journalHover ? 0 : 4)
-
-            Button { journalInitialDay = nil; showingJournal = true } label: {
-                Text("✎")
-                    .font(.custom("ABCStefanTrial-Simple", size: 20))
-                    .foregroundStyle(desk)
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(Color(hex: 0x20211E)))
-                    .scaleEffect(journalHover ? 1.07 : 1)
+    private var newToDoListButton: some View {
+        Button { manager.newSticky() } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("New To Do List")
+                    .font(.system(size: 13, weight: .medium))
             }
-            .buttonStyle(.plain)
+            .foregroundStyle(desk)
+            .padding(.horizontal, 18)
+            .frame(height: 48)
+            .background(Color(hex: 0x20211E), in: Capsule())
+            .contentShape(Capsule())
         }
-        .onHover { journalHover = $0 }
-        .animation(.easeInOut(duration: 0.15), value: journalHover)
+        .buttonStyle(.plain)
+        .keyboardShortcut("n", modifiers: .command)
+        .help("Create a new to-do list")
     }
 
     private static let dateFormatter: DateFormatter = {
