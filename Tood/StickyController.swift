@@ -13,6 +13,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var deminiaturizeObserver: NSObjectProtocol?
     private var suppressNextAutoSelect = false
     private var hosting: StickyHostingView!
+    private var frameBeforeExpansion: NSRect?
 
     init(model: StickyModel, manager: StickyManager) {
         self.model = model
@@ -244,6 +245,32 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// Genie-effect minimizes to the Dock, same as any other window —
     /// unlike closing, this doesn't delete the sticky.
     func minimizeSticky() { panel.miniaturize(nil) }
+
+    /// The dedicated archive control bypasses the close prompt because its
+    /// intent is explicit and the archived sticky remains recoverable.
+    func archiveSticky() { manager?.archive(model.id) }
+
+    /// Green traffic-light behavior for a sticky: toggle between its saved
+    /// working size and a generous enlarged desktop size without entering
+    /// macOS full screen.
+    func toggleExpanded() {
+        if let previous = frameBeforeExpansion {
+            frameBeforeExpansion = nil
+            panel.setFrame(previous, display: true, animate: true)
+            return
+        }
+        guard let visible = (panel.screen ?? NSScreen.main)?.visibleFrame else { return }
+        frameBeforeExpansion = panel.frame
+        let width = min(max(panel.frame.width, 720), visible.width - 80)
+        let height = min(max(panel.frame.height, 720), visible.height - 80)
+        let target = NSRect(
+            x: visible.midX - width / 2,
+            y: visible.midY - height / 2,
+            width: width,
+            height: height
+        )
+        panel.setFrame(target, display: true, animate: true)
+    }
 
     /// Every way of closing a sticky (the X button, ⌘D, the context menu's
     /// "Delete Sticky") routes through here rather than deleting outright.

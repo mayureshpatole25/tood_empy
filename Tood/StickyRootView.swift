@@ -53,7 +53,7 @@ struct StickyRootView: View {
             paperBackground
             content
             bottomToolbar
-            topRightButtons
+            topWindowControls
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         // A `.background` GeometryReader reads the window's current height
@@ -121,7 +121,7 @@ struct StickyRootView: View {
             checklist
         }
         .padding(.horizontal, 32)
-        .padding(.top, 28)
+        .padding(.top, 52)
         .padding(.bottom, 64) // clears the bottom hover toolbar, which now sits flush against the window edge
     }
 
@@ -132,9 +132,20 @@ struct StickyRootView: View {
             // which ate into the title's width and made longer titles wrap
             // mid-word or get cut off. Up here it costs a line of height
             // instead, and the title gets the sticky's full width.
-            Text(Self.dateFormatter.string(from: model.day))
-                .font(bodyFont(14))
-                .foregroundStyle(color.ink.opacity(0.3))
+            HStack(spacing: 8) {
+                Text(Self.dateFormatter.string(from: model.day))
+                    .font(bodyFont(14))
+                    .foregroundStyle(color.ink.opacity(0.3))
+                Button { controller.archiveSticky() } label: {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(color.ink.opacity(0.38))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Archive sticky")
+            }
 
             // Gives the title an explicit, fixed width budget — an
             // unconstrained TextField's ideal width just grows with its
@@ -218,35 +229,37 @@ struct StickyRootView: View {
     /// itself there regardless of its own internal alignment. Learned that
     /// the hard way: an earlier version of this without the frame landed
     /// dead center instead of at either edge.
-    private var topRightButtons: some View {
+    private var topWindowControls: some View {
         VStack {
-            HStack(spacing: 2) {
+            HStack(spacing: 8) {
+                trafficLight(color: Color(red: 1, green: 0.37, blue: 0.34), help: "Close sticky") {
+                    controller.hide()
+                }
+                trafficLight(color: Color(red: 1, green: 0.75, blue: 0.2), help: "Minimize sticky") {
+                    controller.minimizeSticky()
+                }
+                trafficLight(color: Color(red: 0.18, green: 0.78, blue: 0.35), help: "Enlarge sticky") {
+                    controller.toggleExpanded()
+                }
                 Spacer()
-                Button { controller.minimizeSticky() } label: {
-                    Text("–")
-                        .font(.custom("ABCStefanTrial-Simple", size: 16))
-                        .foregroundStyle(color.ink.opacity(0.3))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Button { controller.requestClose() } label: {
-                    Text("X")
-                        .font(.custom("ABCStefanTrial-Simple", size: 16))
-                        .foregroundStyle(color.ink.opacity(0.3))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Archives this sticky, or delete it for good")
             }
             Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 14)
-        .padding(.trailing, 14)
-        .opacity(hovering ? 1 : 0)
-        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .padding(.leading, 16)
+    }
+
+    private func trafficLight(color: Color, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .frame(width: 12, height: 12)
+                .overlay(Circle().stroke(.black.opacity(0.12), lineWidth: 0.5))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     // MARK: - Checklist
