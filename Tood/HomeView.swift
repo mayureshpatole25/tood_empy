@@ -172,10 +172,52 @@ struct HomeView: View {
 
     private var bottomRow: some View {
         VStack(spacing: 14) {
-            stickiesFan
+            stickyWorkspace
             FocusSoundControl()
                 .frame(maxWidth: .infinity, alignment: .center)
         }
+    }
+
+    /// A straightforward workspace replaces the decorative fan: the main
+    /// action is always visible, every sticky gets equal visual weight, and
+    /// larger collections scroll without compressing into an unreadable pile.
+    private var stickyWorkspace: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("Your stickies")
+                    .font(.system(size: 18, weight: .medium))
+                Spacer()
+                Button { manager.newSticky() } label: {
+                    Label("New sticky", systemImage: "plus")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(desk)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(Color(hex: 0x20211E), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut("n", modifiers: .command)
+            }
+
+            if manager.order.isEmpty {
+                emptyStickyState
+            } else {
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 18) {
+                        ForEach(manager.order, id: \.self) { id in
+                            if let controller = manager.controllers[id] {
+                                StickyDeskCard(model: controller.model) {
+                                    manager.bringToFront(id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 12)
+                }
+                .scrollIndicators(.automatic)
+            }
+        }
+        .frame(height: DeskCardMetrics.height + 78)
     }
 
     /// No scroll view, no clipping, no fade — the fan just gets denser as
