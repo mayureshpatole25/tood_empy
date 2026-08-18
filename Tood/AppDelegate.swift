@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import CoreText
-import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -9,16 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var journal: JournalStore!
     private var statusMenu: StatusMenuController!
 
-    /// Sparkle's own standard UI (a quiet "update available" prompt, not a
-    /// custom one) — background checks daily (SUScheduledCheckInterval),
-    /// downloads on demand, never installs without asking first.
-    private(set) var updaterController: SPUStandardUpdaterController!
-
     private var homeWindow: HostedWindowController<HomeView>?
     private var settingsWindow: HostedWindowController<SettingsView>?
     private var onboardingWindow: HostedWindowController<OnboardingView>?
     private var introWindow: HostedWindowController<IntroFallView>?
-    private var reportBugWindow: HostedWindowController<ReportBugView>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Regular app: Dock icon visible, matches LSUIElement=false in
@@ -39,8 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerBundledFonts()
         manager = StickyManager()
         journal = JournalStore()
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
         statusMenu = StatusMenuController(manager: manager, appDelegate: self)
         manager.restoreAll()
 
@@ -50,7 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.manager.newSticky()
         }
         GlobalHotKeyManager.shared.reregister()
-        AnnouncementService.shared.checkForAnnouncement()
 
         if !AppSettings.shared.onboardingCompleted {
             // Don't let real floating stickies (a true first run's
@@ -89,23 +79,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showHome() {
         if homeWindow == nil {
             homeWindow = HostedWindowController(
-                title: "Tood",
+                title: AppIdentity.displayName,
                 size: NSSize(width: 900, height: 640),
                 hidesTitleBar: true,
                 content: HomeView(manager: manager, journal: journal)
             )
         }
         homeWindow?.present()
-        // The periodic refresh in AgendaTimeline can be up to 5 minutes
-        // stale — an immediate one here makes reopening Home feel current
-        // right away instead of waiting for the next tick.
-        Task { await GoogleCalendarService.shared.refreshToday() }
-    }
-
-    /// The status menu's "Check for Updates…" — same feed/UI Sparkle's own
-    /// background checks use, just triggered on demand.
-    func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
     }
 
     func showSettings() {
@@ -120,27 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.present()
     }
 
-    /// Fresh window every time (unlike Settings/Home, which stay around) —
-    /// this is a one-shot form, not persistent state, so reopening it later
-    /// should start blank rather than showing whatever was left over from
-    /// the last report.
-    func showReportBug() {
-        let controller = HostedWindowController(
-            title: "Report a Bug",
-            size: NSSize(width: 420, height: 400),
-            resizable: false,
-            content: ReportBugView(onDone: { [weak self] in
-                self?.reportBugWindow?.close()
-                self?.reportBugWindow = nil
-            })
-        )
-        reportBugWindow = controller
-        controller.present()
-    }
-
     private func showIntro() {
         let controller = HostedWindowController(
-            title: "Tood",
+            title: AppIdentity.displayName,
             size: NSSize(width: 640, height: 520),
             resizable: false,
             hidesTitleBar: true,
@@ -156,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOnboarding() {
         let controller = HostedWindowController(
-            title: "Welcome to Tood",
+            title: "Welcome to \(AppIdentity.displayName)",
             size: NSSize(width: 640, height: 520),
             resizable: false,
             hidesTitleBar: true,

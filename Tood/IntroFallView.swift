@@ -47,7 +47,7 @@ struct IntroFallView: View {
     /// just with white type (rather than the usual black ink).
     private var welcomeStickyCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Welcome to Tood.")
+            Text("Welcome to \(AppIdentity.displayName).")
                 .font(.custom("HelveticaNeue-Medium", size: 34))
                 .foregroundStyle(.white)
             Text("A place for simple, no-fuss to-dos. Create little sticky notes that live on your desktop.")

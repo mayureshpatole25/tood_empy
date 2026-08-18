@@ -7,12 +7,8 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		A500000000000000000000A5 /* Tood.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tood.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A500000000000000000000A5 /* Empy Tood.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Empy Tood.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
-
-/* Begin PBXBuildFile section */
-	D300000000000000000000D3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = D200000000000000000000D2 /* Sparkle */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		C100000000000000000000C1 /* Exceptions for "Tood" folder in "Tood" target */ = {
@@ -40,7 +36,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D300000000000000000000D3 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -58,7 +53,7 @@
 		A400000000000000000000A4 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A500000000000000000000A5 /* Tood.app */,
+				A500000000000000000000A5 /* Empy Tood.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -83,10 +78,9 @@
 			);
 			name = Tood;
 			packageProductDependencies = (
-				D200000000000000000000D2 /* Sparkle */,
 			);
-			productName = Tood;
-			productReference = A500000000000000000000A5 /* Tood.app */;
+			productName = "Empy Tood";
+			productReference = A500000000000000000000A5 /* Empy Tood.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -114,7 +108,6 @@
 			);
 			mainGroup = A300000000000000000000A3;
 			packageReferences = (
-				D100000000000000000000D1 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
@@ -233,8 +226,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.renee.Today;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.empy.EmpyTood;
+				PRODUCT_NAME = "Empy Tood";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -258,8 +251,8 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.7;
-				PRODUCT_BUNDLE_IDENTIFIER = com.renee.Today;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.empy.EmpyTood;
+				PRODUCT_NAME = "Empy Tood";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -288,24 +281,6 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		D100000000000000000000D1 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/sparkle-project/Sparkle";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.6.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		D200000000000000000000D2 /* Sparkle */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D100000000000000000000D1 /* XCRemoteSwiftPackageReference "Sparkle" */;
-			productName = Sparkle;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A100000000000000000000A1 /* Project object */;
 }

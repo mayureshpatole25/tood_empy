@@ -5,7 +5,7 @@ import Security
 /// sensitive value this app stores, so it never touches disk in plaintext
 /// the way UserDefaults would.
 enum KeychainStore {
-    private static let service = "com.renee.Today"
+    private static let service = AppIdentity.keychainService
 
     static func write(key: String, value: String) {
         let query: [String: Any] = [
