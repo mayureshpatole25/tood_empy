@@ -16,15 +16,12 @@ struct OnboardingView: View {
     @State private var color: StickyColor? = StickyColor.defaultColor
     @State private var font: StickyFont = StickyFont.defaultFont
     @State private var previewSticky: StickyModel?
-    @State private var connectingCalendar = false
     @FocusState private var itemFieldFocused: Bool
-
-    private let auth = GoogleAuthService.shared
 
     // "Welcome" no longer lives here — `IntroFallView` (the falling-stickies
     // page shown right before this) already carries that greeting, so this
     // wizard starts straight at the first real choice instead of repeating it.
-    private let steps = ["Color", "Font", "Sticky", "Shortcuts", "Calendar"]
+    private let steps = ["Color", "Font", "Sticky", "Shortcuts"]
 
     /// Same cream desk + dotted paper texture as `IntroFallView`, and the
     /// same 640×520 window size — the wizard should feel like the next page
@@ -51,8 +48,7 @@ struct OnboardingView: View {
                     case 0: colorStep
                     case 1: fontStep
                     case 2: stickyStep
-                    case 3: shortcutStep
-                    default: calendarStep
+                    default: shortcutStep
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -191,43 +187,6 @@ struct OnboardingView: View {
                     ShortcutRecorderField(combo: $settings.newStickyShortcut)
                 }
             }
-        }
-    }
-
-    /// Last step, and optional — skippable via "Get Started" same as any
-    /// other step. Reuses `GoogleAuthService` directly (same connect flow
-    /// as Settings), so finishing this step here or later from Settings
-    /// leaves the app in the same state either way.
-    private var calendarStep: some View {
-        VStack(spacing: 20) {
-            stepHeading("Connect your calendar", "See today's events on your Home screen, right next to your stickies.")
-            if auth.isConnected {
-                VStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundStyle(.green)
-                    Text(auth.connectedEmail ?? "Connected")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            } else {
-                Button(connectingCalendar ? "Connecting…" : "Connect Google Calendar") {
-                    connectCalendar()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(connectingCalendar)
-                Text("Optional. You can always connect later from Settings.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func connectCalendar() {
-        connectingCalendar = true
-        Task {
-            defer { connectingCalendar = false }
-            try? await auth.connect()
         }
     }
 

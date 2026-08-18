@@ -10,6 +10,7 @@ struct StickyRootView: View {
     @FocusState private var focusedID: UUID?
     @FocusState private var titleFocused: Bool
     @State private var hovering = false
+    @State private var hoveringTopChrome = false
     @State private var showColors = false
     @State private var showFonts = false
     @State private var paywallPack: ColorPack?
@@ -34,7 +35,7 @@ struct StickyRootView: View {
             paperBackground
             content
             bottomToolbar
-            topRightButtons
+            windowControls
         }
         .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
         // A `.background` GeometryReader reads the window's current width
@@ -57,7 +58,16 @@ struct StickyRootView: View {
         .sheet(item: $paywallPack) { pack in
             ColorPackPaywallView(pack: pack) { }
         }
-        .onHover { hovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let location):
+                hovering = true
+                hoveringTopChrome = location.y <= 120
+            case .ended:
+                hovering = false
+                hoveringTopChrome = false
+            }
+        }
         .onAppear {
             focusedID = model.items.first?.id
             model.focusedItemID = focusedID
@@ -201,45 +211,44 @@ struct StickyRootView: View {
         Binding(get: { model.title }, set: { model.setTitle($0) })
     }
 
-    /// Minimize + dismiss, pinned to the top-right corner, independent of
-    /// the bottom hover toolbar. Kept very low-opacity so it doesn't compete
-    /// with the date.
-    ///
-    /// Explicit `maxWidth: .infinity, alignment: .trailing` here, not just
-    /// an inner `Spacer()` — the enclosing ZStack's own alignment is `.top`
-    /// (top-*center*), so a child that doesn't span the full width centers
-    /// itself there regardless of its own internal alignment. Learned that
-    /// the hard way: an earlier version of this without the frame landed
-    /// dead center instead of at either edge.
-    private var topRightButtons: some View {
+    /// Familiar macOS traffic-light controls. They only materialize while the
+    /// pointer is in the sticky's top 120pt, keeping the paper quiet the rest
+    /// of the time. Closing hides the sticky; it never archives or deletes it.
+    private var windowControls: some View {
         VStack {
-            HStack(spacing: 2) {
-                Spacer()
-                Button { controller.minimizeSticky() } label: {
-                    Text("–")
-                        .font(.custom("ABCStefanTrial-Simple", size: 16))
-                        .foregroundStyle(color.ink.opacity(0.3))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+            HStack(spacing: 8) {
+                trafficLight(color: Color(red: 1.0, green: 0.37, blue: 0.34),
+                             label: "Close sticky") {
+                    controller.closeSticky()
                 }
-                .buttonStyle(.plain)
-                Button { controller.requestClose() } label: {
-                    Text("X")
-                        .font(.custom("ABCStefanTrial-Simple", size: 16))
-                        .foregroundStyle(color.ink.opacity(0.3))
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                trafficLight(color: Color(red: 1.0, green: 0.74, blue: 0.18),
+                             label: "Minimize sticky") {
+                    controller.minimizeSticky()
                 }
-                .buttonStyle(.plain)
-                .help("Archives this sticky, or delete it for good")
+                Spacer(minLength: 0)
             }
             Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 14)
-        .padding(.trailing, 14)
-        .opacity(hovering ? 1 : 0)
-        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .padding(.leading, 14)
+        .opacity(hoveringTopChrome ? 1 : 0)
+        .allowsHitTesting(hoveringTopChrome)
+        .animation(.easeInOut(duration: 0.15), value: hoveringTopChrome)
+    }
+
+    private func trafficLight(color: Color, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .overlay(Circle().stroke(.black.opacity(0.14), lineWidth: 0.5))
+                .frame(width: 12, height: 12)
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .help(label)
     }
 
     // MARK: - Checklist

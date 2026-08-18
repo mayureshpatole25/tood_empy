@@ -11,22 +11,22 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C100000000000000000000C1 /* Exceptions for "Tood" folder in "Tood" target */ = {
+		C100000000000000000000C1 /* Exceptions for "Empy Tood" folder in "Empy Tood" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = A200000000000000000000A2 /* Tood */;
+			target = A200000000000000000000A2 /* Empy Tood */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		A600000000000000000000A6 /* Tood */ = {
+		A600000000000000000000A6 /* Empy Tood */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				C100000000000000000000C1 /* Exceptions for "Tood" folder in "Tood" target */,
+				C100000000000000000000C1 /* Exceptions for "Empy Tood" folder in "Empy Tood" target */,
 			);
-			path = Tood;
+			path = "Empy Tood";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -45,7 +45,7 @@
 		A300000000000000000000A3 = {
 			isa = PBXGroup;
 			children = (
-				A600000000000000000000A6 /* Tood */,
+				A600000000000000000000A6 /* Empy Tood */,
 				A400000000000000000000A4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A200000000000000000000A2 /* Tood */ = {
+		A200000000000000000000A2 /* Empy Tood */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Tood" */;
+			buildConfigurationList = B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Empy Tood" */;
 			buildPhases = (
 				A700000000000000000000A7 /* Sources */,
 				A800000000000000000000A8 /* Frameworks */,
@@ -74,9 +74,9 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				A600000000000000000000A6 /* Tood */,
+				A600000000000000000000A6 /* Empy Tood */,
 			);
-			name = Tood;
+			name = "Empy Tood";
 			packageProductDependencies = (
 			);
 			productName = "Empy Tood";
@@ -98,7 +98,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B100000000000000000000B1 /* Build configuration list for PBXProject "Tood" */;
+			buildConfigurationList = B100000000000000000000B1 /* Build configuration list for PBXProject "Empy Tood" */;
 			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -115,7 +115,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A200000000000000000000A2 /* Tood */,
+				A200000000000000000000A2 /* Empy Tood */,
 			);
 		};
 /* End PBXProject section */
@@ -213,14 +213,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Tood/Tood.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "Empy Tood/Empy Tood.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Tood/Info.plist;
+				INFOPLIST_FILE = "Empy Tood/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -238,14 +238,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Tood/Tood.entitlements;
+				CODE_SIGN_ENTITLEMENTS = "Empy Tood/Empy Tood.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Tood/Info.plist;
+				INFOPLIST_FILE = "Empy Tood/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -261,7 +261,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		B100000000000000000000B1 /* Build configuration list for PBXProject "Tood" */ = {
+		B100000000000000000000B1 /* Build configuration list for PBXProject "Empy Tood" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B300000000000000000000B3 /* Debug */,
@@ -270,7 +270,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Tood" */ = {
+		B200000000000000000000B2 /* Build configuration list for PBXNativeTarget "Empy Tood" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B500000000000000000000B5 /* Debug */,

@@ -194,6 +194,10 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// unlike closing, this doesn't delete the sticky.
     func minimizeSticky() { panel.miniaturize(nil) }
 
+    /// Close only hides this window. The sticky and all of its contents stay
+    /// in the manager and on disk, so it can be opened again from Home.
+    func closeSticky() { hide() }
+
     /// Every way of closing a sticky (the X button, ⌘D, the context menu's
     /// "Delete Sticky") routes through here rather than deleting outright.
     /// Respects `AppSettings.closeBehavior` first, so someone who'd rather

@@ -18,12 +18,9 @@ struct SettingsView: View {
     @State private var corner: StickyCorner = StickyCorner.startCorner
     @State private var showColorPicker = false
     @State private var showFontPicker = false
-    @State private var connectingCalendar = false
     @State private var paywallPack: ColorPack?
     @Bindable var settings: AppSettings
     private var packStore: ColorPackStore { ColorPackStore.shared }
-
-    private let auth = GoogleAuthService.shared
 
     var body: some View {
         Form {
@@ -36,24 +33,6 @@ struct SettingsView: View {
                 TextField("Prompt", text: $settings.journalPrompt)
                 Toggle("Stamp entries with your location", isOn: $settings.journalLocationEnabled)
                 Text("Journal entries are stored locally only, never sent anywhere.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Calendar") {
-                if auth.isConnected {
-                    LabeledContent("Google Calendar") {
-                        Text(auth.connectedEmail ?? "Connected")
-                            .foregroundStyle(.secondary)
-                    }
-                    Button("Disconnect", role: .destructive) { auth.disconnect() }
-                } else {
-                    Button(connectingCalendar ? "Connecting…" : "Connect Google Calendar") {
-                        connectCalendar()
-                    }
-                    .disabled(connectingCalendar)
-                }
-                Text("Only reads today's events to show on your Home screen. Nothing is written back to your calendar.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -210,11 +189,4 @@ struct SettingsView: View {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSFullUserName()
     }
 
-    private func connectCalendar() {
-        connectingCalendar = true
-        Task {
-            defer { connectingCalendar = false }
-            try? await auth.connect()
-        }
-    }
 }

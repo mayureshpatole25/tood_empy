@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct ToodApp: App {
+struct EmpyToodApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {

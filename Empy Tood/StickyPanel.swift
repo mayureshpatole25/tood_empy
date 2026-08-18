@@ -1,9 +1,10 @@
 import AppKit
 
 /// A borderless, rounded sticky window. It sits at the normal window level so
-/// clicking another app covers it (not always-on-top), but it's available on
-/// every Space. Resizing from any edge/corner is handled here so it's smooth
-/// and never jumps. No shadow — the sticky is flat, edge-to-edge paper.
+/// clicking another app covers it (not always-on-top), and it stays in the
+/// Space where the user placed it. Resizing from any edge/corner is handled
+/// here so it's smooth and never jumps. No shadow — the sticky is flat,
+/// edge-to-edge paper.
 final class StickyPanel: NSWindow {
 
     /// Required for a borderless window to accept text input.
@@ -24,10 +25,10 @@ final class StickyPanel: NSWindow {
             defer: false
         )
         level = .normal
-        // .canJoinAllSpaces alone was still showing up over another app's
-        // full-screen Space (e.g. full-screen YouTube) — .fullScreenNone
-        // explicitly opts the window out of full-screen Spaces entirely.
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenNone]
+        // Keep each sticky assigned to its current Space. `.canJoinAllSpaces`
+        // made every sticky follow the user across desktops; `.managed` uses
+        // the normal macOS window/Spaces behavior instead.
+        collectionBehavior = [.managed, .fullScreenNone]
 
         isOpaque = false
         backgroundColor = .clear
