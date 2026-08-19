@@ -29,6 +29,19 @@ final class LocationStamper: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Fetches a label only when Location Services access has already been
+    /// granted. This is safe to use for ambient UI (such as Home) because it
+    /// never causes macOS to present a permission prompt.
+    func requestLabelIfAuthorized(completion: @escaping (String?) -> Void) {
+        switch manager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            self.completion = completion
+            manager.requestLocation()
+        default:
+            completion(nil)
+        }
+    }
+
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
             switch manager.authorizationStatus {

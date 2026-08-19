@@ -65,7 +65,10 @@ struct HomeView: View {
             ArchivedStickiesView(manager: manager, onDone: { showingArchive = false })
         }
         .onAppear {
-            LocationStamper.shared.requestLabel { locationLabel = $0 }
+            // Home is ambient UI, so opening the app must never trigger a
+            // system permission dialog. If access was granted previously,
+            // we can still show the quiet location next to today's date.
+            LocationStamper.shared.requestLabelIfAuthorized { locationLabel = $0 }
         }
     }
 
