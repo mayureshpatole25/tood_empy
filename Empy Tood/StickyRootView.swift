@@ -83,16 +83,14 @@ struct StickyRootView: View {
             model.onRequestFocus = {
                 focusedID = model.items.first(where: { !$0.isDone })?.id ?? model.items.first?.id
             }
-            model.onRequestTitleFocus = {
-                focusedID = nil
-                titleFocused = true
-            }
-            model.onRequestFirstItemFocus = {
-                titleFocused = false
-                focusedID = model.items.first?.id
-            }
             model.onRequestLastItemFocus = {
                 focusLastItemForTyping()
+            }
+            model.onMoveCaretHorizontally = { sourceID, direction in
+                moveCaretHorizontally(from: sourceID, direction: direction)
+            }
+            model.onMoveCaretVertically = { sourceID, direction, screenX in
+                moveCaretVertically(from: sourceID, direction: direction, screenX: screenX)
             }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
@@ -192,10 +190,6 @@ struct StickyRootView: View {
                 // Return is handled by StickyController, which can see the
                 // AppKit caret and split the title at the exact insertion point.
                 .onKeyPress(.return) { .handled }
-                .onKeyPress(.downArrow) {
-                    model.onRequestFirstItemFocus?()
-                    return .handled
-                }
                 .focused($titleFocused)
                 .padding(.trailing, 6) // headroom for negative tracking on the last glyph
                 .frame(width: titleWidth, alignment: .topLeading)
@@ -350,14 +344,6 @@ struct StickyRootView: View {
                         } else {
                             submit(item)
                         }
-                        return .handled
-                    }
-                    .onKeyPress(.upArrow) {
-                        moveFocus(from: item, by: -1)
-                        return .handled
-                    }
-                    .onKeyPress(.downArrow) {
-                        moveFocus(from: item, by: 1)
                         return .handled
                     }
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
@@ -544,20 +530,86 @@ struct StickyRootView: View {
         focusedID = newID
     }
 
-    /// Up/down arrow jumps focus to the adjacent row — same convention as
-    /// Reminders/Things checklists. Trades away moving the cursor between a
-    /// single item's own wrapped lines, but checklist rows are short enough
-    /// in practice that row-to-row navigation is the more useful default.
-    private func moveFocus(from item: TodoItem, by delta: Int) {
+    /// Crosses title/item boundaries after AppKit has exhausted the wrapped
+    /// visual lines within the current field. The controller restores the
+    /// caret at the closest screen-space x on the destination edge.
+    private func moveCaretVertically(from sourceID: UUID?, direction: Int, screenX: CGFloat) {
         let ordered = model.orderedItems
-        guard let idx = ordered.firstIndex(where: { $0.id == item.id }) else { return }
-        if idx == 0, delta < 0 {
-            model.onRequestTitleFocus?()
+        if sourceID == nil {
+            guard direction > 0, let first = ordered.first else { return }
+            focusItem(first.id, alignedToScreenX: screenX, entering: .top)
             return
         }
-        let target = idx + delta
-        guard ordered.indices.contains(target) else { return }
-        focusedID = ordered[target].id
+
+        guard let sourceID, let index = ordered.firstIndex(where: { $0.id == sourceID }) else { return }
+        if direction < 0 {
+            if index == 0 {
+                focusTitle(alignedToScreenX: screenX, entering: .bottom)
+            } else {
+                focusItem(ordered[index - 1].id, alignedToScreenX: screenX, entering: .bottom)
+            }
+        } else if index + 1 < ordered.count {
+            focusItem(ordered[index + 1].id, alignedToScreenX: screenX, entering: .top)
+        }
+    }
+
+    /// Left/Right at a field boundary continues into the adjacent text block,
+    /// exactly as if the title and checklist were one continuous document.
+    private func moveCaretHorizontally(from sourceID: UUID?, direction: Int) {
+        let ordered = model.orderedItems
+        if sourceID == nil {
+            guard direction > 0, let first = ordered.first else { return }
+            focusItem(first.id, atUTF16Offset: 0)
+            return
+        }
+
+        guard let sourceID, let index = ordered.firstIndex(where: { $0.id == sourceID }) else { return }
+        if direction < 0 {
+            if index == 0 {
+                focusTitle(atUTF16Offset: (model.title as NSString).length)
+            } else {
+                let previous = ordered[index - 1]
+                focusItem(previous.id, atUTF16Offset: (previous.text as NSString).length)
+            }
+        } else if index + 1 < ordered.count {
+            focusItem(ordered[index + 1].id, atUTF16Offset: 0)
+        }
+    }
+
+    private func focusTitle(atUTF16Offset offset: Int) {
+        focusedID = nil
+        titleFocused = false
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(atUTF16Offset: offset)
+            titleFocused = true
+        }
+    }
+
+    private func focusTitle(alignedToScreenX screenX: CGFloat, entering edge: StickyCaretEdge) {
+        focusedID = nil
+        titleFocused = false
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(alignedToScreenX: screenX, entering: edge)
+            titleFocused = true
+        }
+    }
+
+    private func focusItem(_ id: UUID, atUTF16Offset offset: Int) {
+        titleFocused = false
+        focusedID = nil
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(atUTF16Offset: offset)
+            focusedID = id
+        }
+    }
+
+    private func focusItem(_ id: UUID, alignedToScreenX screenX: CGFloat, entering edge: StickyCaretEdge) {
+        titleFocused = false
+        focusedID = nil
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(alignedToScreenX: screenX, entering: edge)
+            focusedID = id
+        }
     }
 
     /// Restores the text-editing flow when Return is pressed while the sticky
