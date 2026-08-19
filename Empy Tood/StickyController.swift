@@ -1,6 +1,11 @@
 import AppKit
 import SwiftUI
 
+enum StickyCaretEdge {
+    case top
+    case bottom
+}
+
 /// Owns one sticky: its window, its SwiftUI content, and the wiring that keeps
 /// the model's frame in sync and persists changes.
 @MainActor
@@ -11,7 +16,12 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var keyMonitor: Any?
     private var selectionObserver: NSObjectProtocol?
     private var deminiaturizeObserver: NSObjectProtocol?
-    private var pendingCaretLocation: Int?
+    private enum PendingCaretPlacement {
+        case offset(Int)
+        case horizontal(screenX: CGFloat, edge: StickyCaretEdge)
+    }
+
+    private var pendingCaretPlacement: PendingCaretPlacement?
     private var hosting: StickyHostingView!
     private var frameBeforeExpansion: NSRect?
 
@@ -27,6 +37,7 @@ final class StickyController: NSObject, NSWindowDelegate {
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         panel.delegate = self
+        panel.ensureTextFocus = { [weak self] in self?.ensureTextFocus() }
 
         // Persist on any model mutation. Checklist overflow is handled by
         // its own scroll view, so typing never changes the window's size.
@@ -119,14 +130,52 @@ final class StickyController: NSObject, NSWindowDelegate {
                     return nil
                 }
 
-                if event.keyCode == 124, self.model.isTitleFocused, caret == length {
-                    self.model.onRequestFirstItemFocus?()
+                // Let AppKit move naturally between wrapped visual lines.
+                // At a field's top/bottom edge, continue into the adjacent
+                // title/item while preserving the caret's screen-space x.
+                if event.keyCode == 126, // up
+                   self.isCaret(caret, on: .top, in: editor),
+                   self.hasAdjacentTextField(direction: -1) {
+                    let screenX = editor.firstRect(
+                        forCharacterRange: NSRange(location: caret, length: 0),
+                        actualRange: nil
+                    ).minX
+                    self.model.onMoveCaretVertically?(
+                        self.model.isTitleFocused ? nil : self.model.focusedItemID,
+                        -1,
+                        screenX
+                    )
                     return nil
                 }
-                if event.keyCode == 123,
-                   self.model.focusedItemID == self.model.orderedItems.first?.id,
-                   caret == 0 {
-                    self.model.onRequestTitleFocus?()
+                if event.keyCode == 125, // down
+                   self.isCaret(caret, on: .bottom, in: editor),
+                   self.hasAdjacentTextField(direction: 1) {
+                    let screenX = editor.firstRect(
+                        forCharacterRange: NSRange(location: caret, length: 0),
+                        actualRange: nil
+                    ).minX
+                    self.model.onMoveCaretVertically?(
+                        self.model.isTitleFocused ? nil : self.model.focusedItemID,
+                        1,
+                        screenX
+                    )
+                    return nil
+                }
+
+                if event.keyCode == 124, caret == length,
+                   self.hasAdjacentTextField(direction: 1) {
+                    self.model.onMoveCaretHorizontally?(
+                        self.model.isTitleFocused ? nil : self.model.focusedItemID,
+                        1
+                    )
+                    return nil
+                }
+                if event.keyCode == 123, caret == 0,
+                   self.hasAdjacentTextField(direction: -1) {
+                    self.model.onMoveCaretHorizontally?(
+                        self.model.isTitleFocused ? nil : self.model.focusedItemID,
+                        -1
+                    )
                     return nil
                 }
             }
@@ -151,10 +200,9 @@ final class StickyController: NSObject, NSWindowDelegate {
 
                 self.applySelectionStyle(to: editor)
 
-                guard let requestedLocation = self.pendingCaretLocation else { return }
-                self.pendingCaretLocation = nil
-                let length = (editor.string as NSString).length
-                let caret = NSRange(location: min(requestedLocation, length), length: 0)
+                guard let placement = self.pendingCaretPlacement else { return }
+                self.pendingCaretPlacement = nil
+                let caret = self.caretRange(for: placement, in: editor)
                 if editor.selectedRange() != caret { editor.setSelectedRange(caret) }
             }
         }
@@ -170,7 +218,61 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// selects the destination text automatically; this replaces that with a
     /// caret at the semantic join/split point before it is drawn.
     func placeCaretOnNextFocus(atUTF16Offset offset: Int) {
-        pendingCaretLocation = offset
+        pendingCaretPlacement = .offset(offset)
+    }
+
+    /// Places the caret on the first/last visual line of the next field at
+    /// the x-position closest to where it was in the field being left.
+    func placeCaretOnNextFocus(alignedToScreenX screenX: CGFloat, entering edge: StickyCaretEdge) {
+        pendingCaretPlacement = .horizontal(screenX: screenX, edge: edge)
+    }
+
+    private func caretRange(for placement: PendingCaretPlacement, in editor: NSTextView) -> NSRange {
+        let length = (editor.string as NSString).length
+        switch placement {
+        case .offset(let requestedLocation):
+            return NSRange(location: min(max(requestedLocation, 0), length), length: 0)
+
+        case .horizontal(let screenX, let edge):
+            let anchor = edge == .top ? 0 : length
+            let anchorRect = editor.firstRect(
+                forCharacterRange: NSRange(location: anchor, length: 0),
+                actualRange: nil
+            )
+            let screenPoint = NSPoint(x: screenX, y: anchorRect.midY)
+            guard let window = editor.window else {
+                return NSRange(location: anchor, length: 0)
+            }
+            let windowPoint = window.convertPoint(fromScreen: screenPoint)
+            let editorPoint = editor.convert(windowPoint, from: nil)
+            let location = min(editor.characterIndexForInsertion(at: editorPoint), length)
+            return NSRange(location: location, length: 0)
+        }
+    }
+
+    private func isCaret(_ location: Int, on edge: StickyCaretEdge, in editor: NSTextView) -> Bool {
+        let length = (editor.string as NSString).length
+        guard length > 0 else { return true }
+        let caretRect = editor.firstRect(
+            forCharacterRange: NSRange(location: min(location, length), length: 0),
+            actualRange: nil
+        )
+        let boundary = edge == .top ? 0 : length
+        let boundaryRect = editor.firstRect(
+            forCharacterRange: NSRange(location: boundary, length: 0),
+            actualRange: nil
+        )
+        let tolerance = max(caretRect.height, boundaryRect.height) * 0.5
+        return abs(caretRect.midY - boundaryRect.midY) <= tolerance
+    }
+
+    private func hasAdjacentTextField(direction: Int) -> Bool {
+        if model.isTitleFocused { return direction > 0 && !model.orderedItems.isEmpty }
+        guard let id = model.focusedItemID,
+              let index = model.orderedItems.firstIndex(where: { $0.id == id })
+        else { return false }
+        if direction < 0 { return true } // the title precedes the first item
+        return index + 1 < model.orderedItems.count
     }
 
     /// Keeps text selection visually native to the sticky instead of using
@@ -290,7 +392,17 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// Tracks "most recently active" from a plain click too, not just
     /// programmatic `bringToFront()` — so the global shortcut jumps to
     /// whichever sticky you actually used last either way.
-    func windowDidBecomeKey(_ notification: Notification) { manager?.noteActive(model.id) }
+    func windowDidBecomeKey(_ notification: Notification) {
+        manager?.noteActive(model.id)
+        DispatchQueue.main.async { [weak self] in self?.ensureTextFocus() }
+    }
+
+    /// A key sticky should always remain ready for typing, even after its
+    /// background or a mouse-only control was clicked.
+    private func ensureTextFocus() {
+        guard panel.isKeyWindow, !(panel.firstResponder is NSTextView) else { return }
+        model.onRequestLastItemFocus?()
+    }
 
     private func syncFrame() {
         model.frame = panel.frame

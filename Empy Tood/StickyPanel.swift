@@ -7,6 +7,10 @@ import AppKit
 /// edge-to-edge paper.
 final class StickyPanel: NSWindow {
 
+    /// Supplied by StickyController to restore a blinking text caret after a
+    /// click leaves the key sticky without a text field as first responder.
+    var ensureTextFocus: (() -> Void)?
+
     /// Required for a borderless window to accept text input.
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -56,9 +60,18 @@ final class StickyPanel: NSWindow {
         let point = contentView?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
         if event.type == .leftMouseDown, let zone = resizeZone(at: point) {
             performResize(zone: zone)
+            restoreTextFocusAfterMouseEvent()
             return // consume — don't let it start a background drag or hit a control
         }
         super.sendEvent(event)
+        if event.type == .leftMouseDown { restoreTextFocusAfterMouseEvent() }
+    }
+
+    private func restoreTextFocusAfterMouseEvent() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.isKeyWindow, !(self.firstResponder is NSTextView) else { return }
+            self.ensureTextFocus?()
+        }
     }
 
     private func resizeZone(at p: NSPoint) -> Zone? {
