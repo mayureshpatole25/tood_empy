@@ -13,6 +13,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var deminiaturizeObserver: NSObjectProtocol?
     private var pendingCaretLocation: Int?
     private var hosting: StickyHostingView!
+    private var frameBeforeExpansion: NSRect?
 
     init(model: StickyModel, manager: StickyManager) {
         self.model = model
@@ -238,6 +239,10 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// Close only hides this window. The sticky and all of its contents stay
     /// in the manager and on disk, so it can be opened again from Home.
     func closeSticky() { hide() }
+
+    /// The dedicated archive button is an explicit action, so it skips the
+    /// close-behavior chooser and archives this sticky directly.
+    func archiveSticky() { manager?.archive(model.id) }
 
     /// Every way of closing a sticky (the X button, ⌘D, the context menu's
     /// "Delete Sticky") routes through here rather than deleting outright.

@@ -59,13 +59,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // Re-launching the app while it's already running (e.g. opening it
-    // again from Finder/Spotlight) brings Home back along with the notes.
+    // again from Finder/Spotlight) brings Home back without changing the
+    // visibility or minimized state of any desktop stickies.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         // Guard against the Dock icon (now always visible) being clicked
         // mid-onboarding — that shouldn't reveal every sticky and Home
         // before onboarding's own "Sticky" step gets to do that itself.
         guard AppSettings.shared.onboardingCompleted else { return true }
-        manager.showAll()
         showHome()
         return true
     }

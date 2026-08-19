@@ -84,6 +84,20 @@ final class StickyManager {
         remove(id)
     }
 
+    /// Returns a whole archived sticky to the desktop and removes the
+    /// archived copy only after the live controller has been recreated.
+    func restoreArchived(_ entry: ArchivedSticky) {
+        guard controllers[entry.id] == nil else { return }
+        var data = entry.data
+        data.isVisible = true
+        let model = StickyModel(data: data)
+        addController(for: model)
+        stickyArchive.delete(entry.id)
+        controllers[model.id]?.bringToFront()
+        noteActive(model.id)
+        saveNow()
+    }
+
     func showAll() { for c in controllers.values { c.show() } }
     func hideAll() { for c in controllers.values { c.hide() } }
 
