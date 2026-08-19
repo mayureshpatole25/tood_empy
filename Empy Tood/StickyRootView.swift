@@ -381,8 +381,11 @@ struct StickyRootView: View {
                         .frame(width: 13, height: 13)
                 }
             }
+            .padding(.leading, 1)
             // The visual checkbox shares the exact left edge used by the
-            // date and title; the remaining width stays as an easy target.
+            // date and title, inset by one point so the centered border
+            // stroke stays inside the scroll view's clipped leading edge.
+            // The remaining width stays as an easy target.
             .frame(width: 24, height: 34, alignment: .leading)
             .contentShape(Rectangle())
         }
