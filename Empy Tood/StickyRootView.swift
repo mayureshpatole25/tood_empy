@@ -72,9 +72,12 @@ struct StickyRootView: View {
         .onAppear {
             focusedID = model.items.first?.id
             model.focusedItemID = focusedID
-            model.onBackspaceEmptyRow = { id in
+            model.onSplitTitle = { caret in
+                splitTitle(atUTF16Offset: caret)
+            }
+            model.onMergeItemBackward = { id in
                 if let item = model.items.first(where: { $0.id == id }) {
-                    _ = backspaceDelete(item)
+                    mergeBackward(item)
                 }
             }
             model.onRequestFocus = {
@@ -87,6 +90,9 @@ struct StickyRootView: View {
             model.onRequestFirstItemFocus = {
                 titleFocused = false
                 focusedID = model.items.first?.id
+            }
+            model.onRequestLastItemFocus = {
+                focusLastItemForTyping()
             }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
@@ -183,7 +189,9 @@ struct StickyRootView: View {
                 .tint(color.titleInk) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
                 .lineLimit(1...3)
                 .lineSpacing(titleSize * -0.1) // ~90% line height, same ratio at every step
-                .onKeyPress(.return) { .handled } // titles wrap, they don't take manual line breaks
+                // Return is handled by StickyController, which can see the
+                // AppKit caret and split the title at the exact insertion point.
+                .onKeyPress(.return) { .handled }
                 .onKeyPress(.downArrow) {
                     model.onRequestFirstItemFocus?()
                     return .handled
@@ -552,18 +560,83 @@ struct StickyRootView: View {
         focusedID = ordered[target].id
     }
 
-    /// Backspace on an empty (or whitespace-only) row deletes it and focuses
-    /// the previous row. Returns true if it handled the keystroke.
-    private func backspaceDelete(_ item: TodoItem) -> Bool {
-        guard isBlank(bindingValue(item)) else { return false }
-        let active = model.items.filter { !$0.isDone }
-        guard active.count > 1, let idx = active.firstIndex(where: { $0.id == item.id })
-        else { return false }
-        let target = idx > 0 ? active[idx - 1].id : active[idx + 1].id
-        controller.armSelectionSuppression()
-        model.delete(item.id)
-        focusedID = target
-        return true
+    /// Restores the text-editing flow when Return is pressed while the sticky
+    /// window, rather than one of its fields, owns keyboard focus.
+    private func focusLastItemForTyping() {
+        let targetID: UUID
+        let caret: Int
+        if let last = model.orderedItems.last {
+            targetID = last.id
+            caret = (last.text as NSString).length
+        } else {
+            targetID = model.addItem()
+            caret = 0
+        }
+
+        titleFocused = false
+        focusedID = nil
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(atUTF16Offset: caret)
+            focusedID = targetID
+        }
+    }
+
+    /// Return in the title creates the first checklist line. If the sticky's
+    /// existing invitation row is empty, reuse it instead of creating two
+    /// blank rows. Text after the caret moves into the new line.
+    private func splitTitle(atUTF16Offset offset: Int) {
+        let title = model.title as NSString
+        let split = min(max(offset, 0), title.length)
+        let prefix = title.substring(to: split)
+        let suffix = title.substring(from: split)
+
+        model.setTitle(prefix)
+        let targetID: UUID
+        if let first = model.orderedItems.first, isBlank(bindingValue(first)) {
+            model.setText(first.id, suffix)
+            targetID = first.id
+        } else {
+            let item = TodoItem(text: suffix)
+            model.items.insert(item, at: 0)
+            model.onChange?()
+            targetID = item.id
+        }
+
+        // The first row is commonly still stored in `focusedID` from when
+        // the sticky appeared. Assigning that same ID while the title owns
+        // first responder does not trigger a SwiftUI focus change, so clear
+        // it first and restore it on the next run-loop turn. Arm the caret
+        // immediately before that restoration so an outgoing title
+        // selection notification cannot consume it.
+        titleFocused = false
+        focusedID = nil
+        DispatchQueue.main.async {
+            controller.placeCaretOnNextFocus(atUTF16Offset: 0)
+            focusedID = targetID
+        }
+    }
+
+    /// Backspace at column zero joins an item to its preceding text block.
+    /// The first row joins the title; every other row joins the prior item.
+    private func mergeBackward(_ item: TodoItem) {
+        guard let idx = model.items.firstIndex(where: { $0.id == item.id }) else { return }
+        let itemText = model.items[idx].text
+
+        if idx == 0 {
+            let join = (model.title as NSString).length
+            model.setTitle(model.title + itemText)
+            model.delete(item.id)
+            controller.placeCaretOnNextFocus(atUTF16Offset: join)
+            focusedID = nil
+            titleFocused = true
+        } else {
+            let previous = model.items[idx - 1]
+            let join = (previous.text as NSString).length
+            model.setText(previous.id, previous.text + itemText)
+            model.delete(item.id)
+            controller.placeCaretOnNextFocus(atUTF16Offset: join)
+            focusedID = previous.id
+        }
     }
 
     private func handleDash(_ item: TodoItem, _ value: String) {

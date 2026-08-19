@@ -42,11 +42,11 @@ final class StickyModel: Identifiable {
     @ObservationIgnored var focusedItemID: UUID?
     @ObservationIgnored var isTitleFocused = false
 
-    /// Set by the view; invoked by the window's key monitor when backspace is
-    /// pressed on an empty/whitespace-only row (SwiftUI's TextField swallows
-    /// .delete key presses before onKeyPress ever sees them, even when the
-    /// field is empty, so this has to be driven from outside the TextField).
-    @ObservationIgnored var onBackspaceEmptyRow: ((UUID) -> Void)?
+    /// Set by the view; invoked by the window's key monitor for editing that
+    /// crosses TextField boundaries. SwiftUI's TextField consumes Return and
+    /// Delete before `onKeyPress` can reliably inspect the AppKit caret.
+    @ObservationIgnored var onSplitTitle: ((Int) -> Void)?
+    @ObservationIgnored var onMergeItemBackward: ((UUID) -> Void)?
 
     /// Set by the view; invoked by `StickyController.focusForTyping()` (the
     /// global "show active sticky" shortcut) to move keyboard focus onto the
@@ -55,6 +55,7 @@ final class StickyModel: Identifiable {
     @ObservationIgnored var onRequestFocus: (() -> Void)?
     @ObservationIgnored var onRequestTitleFocus: (() -> Void)?
     @ObservationIgnored var onRequestFirstItemFocus: (() -> Void)?
+    @ObservationIgnored var onRequestLastItemFocus: (() -> Void)?
 
     /// Set by the view; invoked by the window's key monitor when ⌘V pastes
     /// multi-line text — same bridge pattern, since focusing the resulting
