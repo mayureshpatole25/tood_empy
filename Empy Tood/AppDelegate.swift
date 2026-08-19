@@ -51,22 +51,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             manager.hideAll()
             showIntro()
         } else {
-            // A normal launch (double-click in Finder, Spotlight, etc.) —
-            // without this, an .accessory app with no Dock icon has no
-            // window to show, so it'd silently do nothing visible at all.
-            showHome()
+            // Normal launches go straight back to the one sticky that was
+            // open and active. Home is intentionally available only from
+            // the menu-bar command.
+            manager.focusLastOpenSticky()
         }
     }
 
     // Re-launching the app while it's already running (e.g. opening it
-    // again from Finder/Spotlight) brings Home back without changing the
-    // visibility or minimized state of any desktop stickies.
+    // again from Finder/Spotlight) returns to the already-open sticky. It
+    // must not open Home or resurrect a sticky the user closed.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         // Guard against the Dock icon (now always visible) being clicked
         // mid-onboarding — that shouldn't reveal every sticky and Home
         // before onboarding's own "Sticky" step gets to do that itself.
         guard AppSettings.shared.onboardingCompleted else { return true }
-        showHome()
+        manager.focusLastOpenSticky()
         return true
     }
 
@@ -125,8 +125,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             content: OnboardingView(manager: manager, settings: AppSettings.shared, onFinish: { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil
-                self?.manager.showAll()
-                self?.showHome()
+                self?.manager.focusLastOpenSticky()
             }, onExitToIntro: { [weak self] in
                 self?.onboardingWindow?.close()
                 self?.onboardingWindow = nil

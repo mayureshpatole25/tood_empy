@@ -22,6 +22,7 @@ final class StickyManager {
     @ObservationIgnored private var rollover: RolloverScheduler?
 
     @ObservationIgnored private var saveTimer: Timer?
+    @ObservationIgnored private let lastActiveDefaultsKey = "today.lastActiveStickyID"
 
     init() {
         rollover = RolloverScheduler(onRollover: { [weak self] in self?.performRollover() })
@@ -42,7 +43,20 @@ final class StickyManager {
             scheduleSave()
         } else {
             // File exists — respect it even if empty (all stickies deleted).
-            for data in persistence.load() {
+            // Restore at most the one sticky that was last active. A sticky
+            // that was closed stays closed, and several windows can never
+            // flood the desktop just because they were visible at shutdown.
+            let saved = persistence.load()
+            let savedLastActiveID = UserDefaults.standard
+                .string(forKey: lastActiveDefaultsKey)
+                .flatMap(UUID.init(uuidString:))
+            let restoreID = savedLastActiveID.flatMap { id in
+                saved.contains(where: { $0.id == id && $0.isVisible }) ? id : nil
+            } ?? saved.last(where: \.isVisible)?.id
+
+            mostRecentlyActiveID = restoreID
+            for var data in saved {
+                data.isVisible = data.id == restoreID
                 let model = StickyModel(data: data)
                 addController(for: model)
             }
@@ -63,6 +77,7 @@ final class StickyManager {
         let model = StickyModel.makeNew(at: origin, color: .nextNewStickyColor())
         addController(for: model)
         controllers[model.id]?.bringToFront()
+        noteActive(model.id)
         scheduleSave()
     }
 
@@ -115,7 +130,21 @@ final class StickyManager {
     /// Called by `StickyController` (bringToFront, or the window becoming
     /// key from a plain click) so "show active sticky" always jumps to
     /// whichever one you actually used last.
-    func noteActive(_ id: UUID) { mostRecentlyActiveID = id }
+    func noteActive(_ id: UUID) {
+        mostRecentlyActiveID = id
+        UserDefaults.standard.set(id.uuidString, forKey: lastActiveDefaultsKey)
+    }
+
+    /// Used by app launch/reopen. It focuses the last sticky that is already
+    /// open, but never resurrects a sticky the user closed and never creates
+    /// a replacement when all stickies are closed.
+    func focusLastOpenSticky() {
+        let id = mostRecentlyActiveID.flatMap { id in
+            controllers[id]?.model.isVisible == true ? id : nil
+        } ?? order.reversed().first(where: { controllers[$0]?.model.isVisible == true })
+        guard let id, let controller = controllers[id] else { return }
+        controller.focusForTyping()
+    }
 
     /// The global shortcut: jump to whatever sticky you were last in, or the
     /// most recently created one, or make a brand new one if none exist —
