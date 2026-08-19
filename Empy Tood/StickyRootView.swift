@@ -135,9 +135,20 @@ struct StickyRootView: View {
             // which ate into the title's width and made longer titles wrap
             // mid-word or get cut off. Up here it costs a line of height
             // instead, and the title gets the sticky's full width.
-            Text(Self.dateFormatter.string(from: model.day))
-                .font(bodyFont(14))
-                .foregroundStyle(color.ink.opacity(0.3))
+            HStack(spacing: 8) {
+                Text(Self.dateFormatter.string(from: model.day))
+                    .font(bodyFont(14))
+                    .foregroundStyle(color.ink.opacity(0.3))
+                Button { controller.archiveSticky() } label: {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(color.ink.opacity(0.38))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Archive sticky")
+            }
 
             // Gives the title an explicit, fixed width budget — an
             // unconstrained TextField's ideal width just grows with its

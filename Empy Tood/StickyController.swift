@@ -13,6 +13,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var deminiaturizeObserver: NSObjectProtocol?
     private var suppressNextAutoSelect = false
     private var hosting: StickyHostingView!
+    private var frameBeforeExpansion: NSRect?
 
     init(model: StickyModel, manager: StickyManager) {
         self.model = model
