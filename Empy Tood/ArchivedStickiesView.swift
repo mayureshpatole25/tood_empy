@@ -46,7 +46,15 @@ struct ArchivedStickiesView: View {
         .background(desk)
         .onAppear { reload() }
         .sheet(item: $viewing) { entry in
-            ArchivedStickyDetailView(model: StickyModel(data: entry.data), onDone: { viewing = nil })
+            ArchivedStickyDetailView(
+                model: StickyModel(data: entry.data),
+                onRestore: {
+                    manager.restoreArchived(entry)
+                    viewing = nil
+                    reload()
+                },
+                onDone: { viewing = nil }
+            )
         }
     }
 

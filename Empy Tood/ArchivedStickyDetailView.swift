@@ -6,6 +6,7 @@ import SwiftUI
 /// mutates it. Opened by tapping a card in ArchivedStickiesView's grid.
 struct ArchivedStickyDetailView: View {
     let model: StickyModel
+    var onRestore: () -> Void
     var onDone: () -> Void
 
     private let corner: CGFloat = 4
@@ -15,7 +16,7 @@ struct ArchivedStickyDetailView: View {
         ZStack(alignment: .top) {
             paperBackground
             content
-            closeButton
+            actions
         }
         .frame(width: 378, height: 490)
     }
@@ -85,10 +86,19 @@ struct ArchivedStickyDetailView: View {
         }
     }
 
-    private var closeButton: some View {
+    private var actions: some View {
         VStack {
             HStack {
                 Spacer()
+                Button(action: onRestore) {
+                    Label("Restore", systemImage: "arrow.uturn.backward")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(color.ink.opacity(0.6))
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background(color.ink.opacity(0.08), in: Capsule())
+                }
+                .buttonStyle(.plain)
                 Button(action: onDone) {
                     Text("X")
                         .font(.custom("ABCStefanTrial-Simple", size: 16))
