@@ -28,6 +28,7 @@ struct StickyRootView: View {
     @State private var availableWidth: CGFloat = 378
 
     private let corner: CGFloat = 4
+    private let contentInset: CGFloat = 24
     private var color: StickyColor { model.color }
 
     var body: some View {
@@ -118,8 +119,12 @@ struct StickyRootView: View {
             Spacer().frame(height: 26)
             checklist
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 28)
+        .padding(.horizontal, contentInset)
+        // Leaves a calm, deliberate gap below the traffic lights instead
+        // of letting the date compete with the window controls. Moving the
+        // the chrome and content independently preserves this gap while the
+        // shared horizontal inset keeps every left/right edge aligned.
+        .padding(.top, 48)
         .padding(.bottom, 64) // clears the bottom hover toolbar, which now sits flush against the window edge
     }
 
@@ -147,7 +152,7 @@ struct StickyRootView: View {
             // Leaving height alone lets the TextField report however tall
             // it genuinely needs to be, which is the only way to guarantee
             // that never happens again.
-            let titleWidth = max(availableWidth - 64, 80) // 64 = content's 32pt horizontal padding × 2
+            let titleWidth = max(availableWidth - (contentInset * 2), 80)
             let titleSize = Self.titleFontSize(
                 for: model.title, baseSize: AppSettings.shared.titleSize.baseSize, availableWidth: titleWidth
             )
@@ -216,7 +221,7 @@ struct StickyRootView: View {
     /// of the time. Closing hides the sticky; it never archives or deletes it.
     private var windowControls: some View {
         VStack {
-            HStack(spacing: 8) {
+            HStack(spacing: 4) {
                 trafficLight(color: Color(red: 1.0, green: 0.37, blue: 0.34),
                              label: "Close sticky") {
                     controller.closeSticky()
@@ -230,8 +235,10 @@ struct StickyRootView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 14)
-        .padding(.leading, 14)
+        // The circle is vertically centered inside a 16pt hit frame, adding
+        // 2pt above its 12pt visual. 22 + 2 = the same 24pt as the left edge.
+        .padding(.top, contentInset - 2)
+        .padding(.leading, contentInset)
         .opacity(hoveringTopChrome ? 1 : 0)
         .allowsHitTesting(hoveringTopChrome)
         .animation(.easeInOut(duration: 0.15), value: hoveringTopChrome)
@@ -243,7 +250,7 @@ struct StickyRootView: View {
                 .fill(color)
                 .overlay(Circle().stroke(.black.opacity(0.14), lineWidth: 0.5))
                 .frame(width: 12, height: 12)
-                .frame(width: 16, height: 16)
+                .frame(width: 16, height: 16, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -287,7 +294,8 @@ struct StickyRootView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(color.ink.opacity(0.32))
-                    .frame(width: 24, height: 24)
+                    .frame(width: 13, height: 24)
+                    .frame(width: 24, alignment: .leading)
                 Text("Add item")
                     .font(bodyFont(13))
                     .foregroundStyle(color.ink.opacity(0.32))
@@ -303,45 +311,40 @@ struct StickyRootView: View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 19) {
                 checkbox(item)
-                if item.isDone {
-                    Text(item.text)
-                        .font(bodyFont(14))
-                        .foregroundStyle(color.inkSecondary)
-                        .strikethrough(true, color: color.inkSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .transition(.identity) // no fade — just the row sliding to its new spot
-                } else {
-                    // axis: .vertical → wraps and grows to new lines instead of
-                    // running off to the right. Enter handled below; backspace
-                    // on an empty row is caught by the window's key monitor
-                    // (StickyController) since TextField swallows .delete.
-                    TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(bodyFont(14))
-                        .foregroundStyle(color.ink.opacity(0.8))
-                        .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                        .lineLimit(1...12)
-                        .focused($focusedID, equals: item.id)
-                        .onChange(of: bindingValue(item)) { _, newValue in
-                            handleDash(item, newValue)
-                        }
-                        .onKeyPress(.return) {
+                // Keep completed rows editable too. Because this stays the
+                // same TextField when isDone changes, its caret survives a
+                // keyboard toggle and Command-Return can toggle it back.
+                TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(bodyFont(14))
+                    .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+                    .strikethrough(item.isDone, color: color.inkSecondary)
+                    .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                    .lineLimit(1...12)
+                    .focused($focusedID, equals: item.id)
+                    .onChange(of: bindingValue(item)) { _, newValue in
+                        handleDash(item, newValue)
+                    }
+                    .onKeyPress(.return, phases: .down) { press in
+                        if press.modifiers.contains(.command) {
+                            toggleDone(item)
+                        } else {
                             submit(item)
-                            return .handled
                         }
-                        .onKeyPress(.upArrow) {
-                            moveFocus(from: item, by: -1)
-                            return .handled
-                        }
-                        .onKeyPress(.downArrow) {
-                            moveFocus(from: item, by: 1)
-                            return .handled
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture { focusedID = item.id }
-                        .transition(.identity)
-                }
+                        return .handled
+                    }
+                    .onKeyPress(.upArrow) {
+                        moveFocus(from: item, by: -1)
+                        return .handled
+                    }
+                    .onKeyPress(.downArrow) {
+                        moveFocus(from: item, by: 1)
+                        return .handled
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture { focusedID = item.id }
+                    .transition(.identity)
             }
             .padding(.vertical, 6)
             Rectangle()
@@ -373,24 +376,15 @@ struct StickyRootView: View {
                         .frame(width: 13, height: 13)
                 }
             }
-            .frame(width: 24, height: 34)      // taller than the visual box — the whole row's click height, not just the glyph
+            // The visual checkbox shares the exact left edge used by the
+            // date and title; the remaining width stays as an easy target.
+            .frame(width: 24, height: 34, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    /// Toggling isDone swaps this row between an editable `TextField` and a
-    /// static strikethrough `Text` — if the row being checked off still has
-    /// keyboard focus, that swap yanks focus out from under the field
-    /// mid-animation, which is what made this feel broken. Clearing focus
-    /// *before* the toggle keeps the animation clean. (This used to move
-    /// focus to a neighboring row instead of clearing it, but that planted
-    /// a visible text cursor/focus ring on a row you never clicked, reading
-    /// as a stray highlight on the line above.)
     private func toggleDone(_ item: TodoItem) {
-        if !item.isDone, focusedID == item.id {
-            focusedID = nil
-        }
         withAnimation(.easeInOut(duration: 0.35)) {
             model.toggle(item.id)
         }
@@ -483,9 +477,11 @@ struct StickyRootView: View {
                         .padding(8)
                     }
 
-                Button { controller.requestNewSticky() } label: {
-                    Text("+").font(.custom("ABCStefanTrial-Simple", size: 18))
+                Button { controller.requestClose() } label: {
+                    Image(systemName: "archivebox")
                 }
+                .accessibilityLabel("Archive or delete sticky")
+                .help("Archive or delete sticky")
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(color.ink.opacity(0.5))
