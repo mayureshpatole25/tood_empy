@@ -26,7 +26,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
-        menu.addItem(withTitle: "Open \(AppIdentity.displayName)", action: #selector(openHome), keyEquivalent: "")
+        menu.addItem(withTitle: "Open \(AppIdentity.displayName) Home", action: #selector(openHome), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
 
