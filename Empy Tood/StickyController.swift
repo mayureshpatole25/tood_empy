@@ -199,6 +199,10 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// in the manager and on disk, so it can be opened again from Home.
     func closeSticky() { hide() }
 
+    /// The dedicated archive button is an explicit action, so it skips the
+    /// close-behavior chooser and archives this sticky directly.
+    func archiveSticky() { manager?.archive(model.id) }
+
     /// Every way of closing a sticky (the X button, ⌘D, the context menu's
     /// "Delete Sticky") routes through here rather than deleting outright.
     /// Respects `AppSettings.closeBehavior` first, so someone who'd rather
