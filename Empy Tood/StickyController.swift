@@ -11,7 +11,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var keyMonitor: Any?
     private var selectionObserver: NSObjectProtocol?
     private var deminiaturizeObserver: NSObjectProtocol?
-    private var suppressNextAutoSelect = false
+    private var pendingCaretLocation: Int?
     private var hosting: StickyHostingView!
 
     init(model: StickyModel, manager: StickyManager) {
@@ -47,9 +47,9 @@ final class StickyController: NSObject, NSWindowDelegate {
             hosting.needsDisplay = true
         }
 
-        // SwiftUI's TextField consumes the delete key for its own editing
-        // before onKeyPress(.delete) ever sees it — even when the field is
-        // empty — so backspace-deletes-empty-row has to be caught here.
+        // SwiftUI's TextField consumes Return/Delete for its own editing
+        // before onKeyPress can reliably inspect the AppKit caret, so edits
+        // that cross the title/item boundary are caught here.
         //
         // Also handles ⌘N and ⌘D here rather than relying on the status-bar
         // menu's key equivalent: this app has no main menu bar (it's
@@ -85,6 +85,17 @@ final class StickyController: NSObject, NSWindowDelegate {
                 }
             }
 
+            // When the sticky is active but no text field owns the caret,
+            // Return resumes editing at the end of the last checklist item.
+            // A collapsed caret is safer than selecting the row: the next
+            // character appends instead of unexpectedly replacing its text.
+            if (event.keyCode == 36 || event.keyCode == 76),
+               event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+               !(self.panel.firstResponder is NSTextView) {
+                self.model.onRequestLastItemFocus?()
+                return nil
+            }
+
             // Cross the title/first-row boundary with left/right only when
             // the caret is already at the corresponding text boundary.
             if event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
@@ -92,6 +103,21 @@ final class StickyController: NSObject, NSWindowDelegate {
                editor.selectedRange().length == 0 {
                 let caret = editor.selectedRange().location
                 let length = (editor.string as NSString).length
+
+                // Treat the title like the first block in the checklist:
+                // Return splits at the caret and moves the suffix into a row.
+                if (event.keyCode == 36 || event.keyCode == 76), self.model.isTitleFocused {
+                    self.model.onSplitTitle?(caret)
+                    return nil
+                }
+
+                // At the start of a row, Backspace joins it to the preceding
+                // row (or to the title when this is the first item).
+                if event.keyCode == 51, let id = self.model.focusedItemID, caret == 0 {
+                    self.model.onMergeItemBackward?(id)
+                    return nil
+                }
+
                 if event.keyCode == 124, self.model.isTitleFocused, caret == length {
                     self.model.onRequestFirstItemFocus?()
                     return nil
@@ -104,13 +130,7 @@ final class StickyController: NSObject, NSWindowDelegate {
                 }
             }
 
-            guard event.keyCode == 51 /* delete */,
-                  let id = self.model.focusedItemID,
-                  let item = self.model.items.first(where: { $0.id == id }),
-                  item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return event }
-            self.model.onBackspaceEmptyRow?(id)
-            return nil
+            return event
         }
 
         // AppKit select-alls a field's text the instant it becomes first
@@ -124,12 +144,17 @@ final class StickyController: NSObject, NSWindowDelegate {
             // queue: nil guarantees synchronous delivery on the posting
             // thread, which for NSTextView selection changes is always main.
             MainActor.assumeIsolated {
-                guard let self, self.suppressNextAutoSelect,
-                      let editor = note.object as? NSTextView, editor.window === self.panel
+                guard let self, let editor = note.object as? NSTextView,
+                      editor.window === self.panel
                 else { return }
-                self.suppressNextAutoSelect = false
-                let end = NSRange(location: (editor.string as NSString).length, length: 0)
-                if editor.selectedRange() != end { editor.setSelectedRange(end) }
+
+                self.applySelectionStyle(to: editor)
+
+                guard let requestedLocation = self.pendingCaretLocation else { return }
+                self.pendingCaretLocation = nil
+                let length = (editor.string as NSString).length
+                let caret = NSRange(location: min(requestedLocation, length), length: 0)
+                if editor.selectedRange() != caret { editor.setSelectedRange(caret) }
             }
         }
     }
@@ -140,9 +165,25 @@ final class StickyController: NSObject, NSWindowDelegate {
         if let deminiaturizeObserver { NotificationCenter.default.removeObserver(deminiaturizeObserver) }
     }
 
-    /// Call right before programmatically moving focus to a row, so the
-    /// automatic select-all that follows gets collapsed to a plain caret.
-    func armSelectionSuppression() { suppressNextAutoSelect = true }
+    /// Call right before programmatically moving focus between fields. AppKit
+    /// selects the destination text automatically; this replaces that with a
+    /// caret at the semantic join/split point before it is drawn.
+    func placeCaretOnNextFocus(atUTF16Offset offset: Int) {
+        pendingCaretLocation = offset
+    }
+
+    /// Keeps text selection visually native to the sticky instead of using
+    /// macOS's neutral grey/accent highlight. Blending toward black preserves
+    /// the paper's hue; alpha keeps the selected text comfortably readable.
+    private func applySelectionStyle(to editor: NSTextView) {
+        let paper = NSColor(model.color.paper)
+        let darkerPaper = paper.blended(withFraction: 0.30, of: .black) ?? paper
+        let background = darkerPaper.withAlphaComponent(0.50)
+        var attributes = editor.selectedTextAttributes
+        guard attributes[.backgroundColor] as? NSColor != background else { return }
+        attributes[.backgroundColor] = background
+        editor.selectedTextAttributes = attributes
+    }
 
     // MARK: - Window lifecycle
 
