@@ -13,7 +13,10 @@ final class StickyPanel: NSWindow {
 
     /// Shared with `StickyHostingView`'s cursor rects so the visible resize
     /// cursor and the actual draggable zone never drift apart.
-    static let resizeEdge: CGFloat = 8
+    // A borderless window has no native frame to grab. Eight points was
+    // technically hittable but too easy to miss horizontally, especially
+    // beside editable SwiftUI content. Use a forgiving invisible gutter.
+    static let resizeEdge: CGFloat = 14
     private let edge: CGFloat = StickyPanel.resizeEdge
     private let resizeMin = NSSize(width: 220, height: 300)
 
@@ -50,7 +53,8 @@ final class StickyPanel: NSWindow {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown, let zone = resizeZone(at: event.locationInWindow) {
+        let point = contentView?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
+        if event.type == .leftMouseDown, let zone = resizeZone(at: point) {
             performResize(zone: zone)
             return // consume — don't let it start a background drag or hit a control
         }
@@ -94,7 +98,9 @@ final class StickyPanel: NSWindow {
                 f.origin.y = startFrame.maxY - newH
                 f.size.height = newH
             }
-            setFrame(f, display: true)
+            // Keep the opposite edge anchored and repaint during the drag;
+            // this makes left/right resizing track the pointer continuously.
+            setFrame(f, display: true, animate: false)
         }
     }
 }
