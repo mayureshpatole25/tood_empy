@@ -118,6 +118,13 @@ struct StickyRootView: View {
             model.onRequestLastItemFocus = {
                 focusLastItemForTyping()
             }
+            model.onMoveCaretToDocumentBoundary = { direction in
+                if direction < 0 {
+                    focusTitle(atUTF16Offset: 0)
+                } else {
+                    focusLastItemForTyping()
+                }
+            }
             model.onMoveCaretHorizontally = { sourceID, direction in
                 moveCaretHorizontally(from: sourceID, direction: direction)
             }

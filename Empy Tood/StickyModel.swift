@@ -60,6 +60,9 @@ final class StickyModel: Identifiable {
     /// from the AppKit-level controller, so this is the same bridge pattern.
     @ObservationIgnored var onRequestFocus: (() -> Void)?
     @ObservationIgnored var onRequestLastItemFocus: (() -> Void)?
+    /// Moves the caret to the start of the title (-1) or the end of the
+    /// final visible checklist item (+1) for Command-Up/Command-Down.
+    @ObservationIgnored var onMoveCaretToDocumentBoundary: ((Int) -> Void)?
     @ObservationIgnored var onMoveCaretHorizontally: ((UUID?, Int) -> Void)?
     @ObservationIgnored var onMoveCaretVertically: ((UUID?, Int, CGFloat) -> Void)?
 

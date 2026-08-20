@@ -88,14 +88,10 @@ final class StickyController: NSObject, NSWindowDelegate {
         // before onKeyPress can reliably inspect the AppKit caret, so edits
         // that cross the title/item boundary are caught here.
         //
-        // Also handles ⌘N and ⌘D here rather than relying on the status-bar
-        // menu's key equivalent: this app has no main menu bar (it's
-        // .accessory), so a menu item's key equivalent only ever fires
-        // while the status menu is literally open — it's not a real global
-        // shortcut. This makes ⌘N/⌘D work whenever a sticky window is
-        // focused, which isn't fully global either, but doesn't require
-        // Accessibility/Input Monitoring permission the way a true
-        // system-wide hotkey would.
+        // Also handles sticky-specific shortcuts here rather than relying
+        // on the status-bar menu's key equivalent, which only fires while
+        // that menu is open. These commands work whenever a sticky window
+        // is focused without requiring Accessibility/Input Monitoring.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.panel else { return event }
 
@@ -112,15 +108,36 @@ final class StickyController: NSObject, NSWindowDelegate {
                 return nil
             }
 
-            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "n" {
+            if pressedKey == "w", commandModifiers == .command {
+                self.closeSticky()
+                return nil
+            }
+            if (event.keyCode == 51 || event.keyCode == 117), commandModifiers == .command {
+                self.requestClose()
+                return nil
+            }
+            if event.keyCode == 126, commandModifiers == .command,
+               let editor = self.panel.firstResponder as? NSTextView,
+               editor.selectedRange().length == 0 {
+                self.model.onMoveCaretToDocumentBoundary?(-1)
+                return nil
+            }
+            if event.keyCode == 125, commandModifiers == .command,
+               let editor = self.panel.firstResponder as? NSTextView,
+               editor.selectedRange().length == 0 {
+                self.model.onMoveCaretToDocumentBoundary?(1)
+                return nil
+            }
+
+            if pressedKey == "n", commandModifiers == .command {
                 self.manager?.newSticky()
                 return nil
             }
-            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "d" {
-                self.requestClose() // asks Archive/Delete/Cancel, same as the X button
+            if pressedKey == "d", commandModifiers == .command {
+                self.requestClose() // asks Archive/Delete/Cancel, same as the archive button
                 return nil
             }
-            if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v",
+            if pressedKey == "v", commandModifiers == .command,
                let focusedID = self.model.focusedItemID,
                let clipboard = NSPasteboard.general.string(forType: .string) {
                 let lines = clipboard
@@ -450,14 +467,15 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     /// Close only hides this window. The sticky and all of its contents stay
     /// in the manager and on disk, so it can be opened again from Home.
-    func closeSticky() { hide() }
+    func closeSticky() { manager?.close(model.id) }
 
     /// The dedicated archive button is an explicit action, so it skips the
     /// close-behavior chooser and archives this sticky directly.
     func archiveSticky() { manager?.archive(model.id) }
 
-    /// Every way of closing a sticky (the X button, ⌘D, the context menu's
-    /// "Delete Sticky") routes through here rather than deleting outright.
+    /// Every explicit archive/delete action (the archive button, ⌘D,
+    /// Command-Delete, and the context menu) routes through here rather than
+    /// deleting outright.
     /// Respects `AppSettings.closeBehavior` first, so someone who'd rather
     /// skip the dialog entirely (set from the status menu, or from the
     /// dialog's own "Don't ask me again" checkbox below) never sees it.
