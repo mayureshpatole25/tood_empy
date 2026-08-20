@@ -421,6 +421,18 @@ final class StickyController: NSObject, NSWindowDelegate {
         manager?.scheduleSave()
     }
 
+    /// Applies a desktop arrangement without taking keyboard focus. The
+    /// manager batches persistence after every participating sticky moves.
+    func arrange(to proposedFrame: NSRect, on screen: NSScreen) {
+        updateWindowSizeLimits(for: screen)
+        let frame = StickyWindowGeometry.runtimeFrame(
+            proposedFrame,
+            visibleFrame: screen.visibleFrame
+        )
+        setPanelFrame(frame, display: true)
+        syncFrame(persist: false)
+    }
+
     func bringToFront() {
         if !model.isVisible { model.isVisible = true }
         repairCurrentFrame(keepFullyVisible: true, persist: true)
