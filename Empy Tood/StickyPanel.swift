@@ -2,9 +2,15 @@ import AppKit
 
 /// A borderless, rounded sticky window. It sits at the normal window level so
 /// clicking another app covers it (not always-on-top), and it stays in the
-/// Space where the user placed it. AppKit handles resizing from every edge
-/// and corner. No shadow — the sticky is flat, edge-to-edge paper.
+/// Space where the user placed it. Width is fixed at the default while AppKit
+/// retains native vertical resizing. The SwiftUI paper is the only corner
+/// mask, so all four corners stay identical. No shadow — the sticky is flat,
+/// edge-to-edge paper.
 final class StickyPanel: NSWindow {
+
+    private static let panelStyleMask: NSWindow.StyleMask = [
+        .borderless, .resizable, .miniaturizable,
+    ]
 
     /// Supplied by StickyController to restore a blinking text caret after a
     /// click leaves the key sticky without a text field as first responder.
@@ -19,10 +25,20 @@ final class StickyPanel: NSWindow {
     /// so `isWindowDragRegion` converts this to a distance from the top.
     private let windowDragRegionDepth: CGFloat = 70
 
-    init(frame: NSRect) {
+    static let defaultSize = StickyWindowGeometry.defaultSize
+    static let minimumSize = StickyWindowGeometry.minimumSize
+
+    init(frameRect: NSRect) {
+        // Persistence stores frame coordinates. Converting explicitly keeps
+        // that contract correct if the window style ever gains decorations;
+        // for today's borderless panel this conversion is an identity.
+        let contentRect = NSWindow.contentRect(
+            forFrameRect: frameRect,
+            styleMask: Self.panelStyleMask
+        )
         super.init(
-            contentRect: frame,
-            styleMask: [.borderless, .resizable, .miniaturizable],
+            contentRect: contentRect,
+            styleMask: Self.panelStyleMask,
             backing: .buffered,
             defer: false
         )
@@ -35,7 +51,11 @@ final class StickyPanel: NSWindow {
         isOpaque = false
         backgroundColor = .clear
         hasShadow = false
-        minSize = NSSize(width: 220, height: 300)
+        minSize = Self.minimumSize
+        maxSize = NSSize(
+            width: StickyWindowGeometry.fixedWidth,
+            height: StickyWindowGeometry.maximumSafeHeight
+        )
 
         // Window movement is routed explicitly in `sendEvent`. Letting
         // AppKit treat the whole paper as movable steals drag gestures from
@@ -46,12 +66,16 @@ final class StickyPanel: NSWindow {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        let point = contentView?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
-        if event.type == .leftMouseDown, isWindowDragRegion(point) {
-            performDrag(with: event)
-            restoreTextFocusAfterMouseEvent()
-            return
+        if event.type == .leftMouseDown {
+            let contentPoint = contentView?.convert(event.locationInWindow, from: nil)
+                ?? event.locationInWindow
+            if isWindowDragRegion(contentPoint) {
+                performDrag(with: event)
+                restoreTextFocusAfterMouseEvent()
+                return
+            }
         }
+
         super.sendEvent(event)
         if event.type == .leftMouseDown { restoreTextFocusAfterMouseEvent() }
     }
@@ -66,6 +90,14 @@ final class StickyPanel: NSWindow {
     private func isWindowDragRegion(_ point: NSPoint) -> Bool {
         guard let contentView else { return false }
         guard contentView.bounds.contains(point) else { return false }
+        // Let AppKit own its resize perimeter. Without this guard the custom
+        // header drag swallows top-edge and top-corner resize mouse-downs and
+        // moves the sticky instead.
+        guard !StickyWindowGeometry.isInNativeResizePerimeter(
+            point,
+            bounds: contentView.bounds
+        ) else { return false }
+
         // NSHostingView uses a flipped coordinate system (y grows downward),
         // unlike a traditional AppKit content view. Normalize the point to a
         // visual distance from the top so the bottom toolbar can never be

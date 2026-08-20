@@ -25,20 +25,26 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var pendingCaretPlacement: PendingCaretPlacement?
     private var hosting: NSHostingView<StickyRootView>!
     private var frameBeforeExpansion: NSRect?
+    private var isRepairingFrame = false
 
     init(model: StickyModel, manager: StickyManager) {
+        model.frame = StickyWindowGeometry.persistedFrame(model.frame)
         self.model = model
         self.manager = manager
-        self.panel = StickyPanel(frame: model.frame)
+        self.panel = StickyPanel(frameRect: model.frame)
         super.init()
 
         let root = StickyRootView(model: model, controller: self)
         hosting = NSHostingView(rootView: root)
-        hosting.frame = panel.contentLayoutRect
+        // The window owns its geometry; the sticky width is deliberately fixed
+        // while its height remains vertically resizable.
+        hosting.sizingOptions = []
+        hosting.frame = NSRect(origin: .zero, size: panel.contentLayoutRect.size)
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
         panel.delegate = self
         panel.ensureTextFocus = { [weak self] in self?.ensureTextFocus() }
+        updateWindowSizeLimits(for: panel.screen)
 
         // Persist on any model mutation. Checklist overflow is handled by
         // its own scroll view, so typing never changes the window's size.
@@ -306,21 +312,72 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     func show() {
         model.isVisible = true
-        panel.setFrame(model.frame, display: true)
-        clampToScreen() // heals any off-screen frame from a past bug, or a screen that's since shrunk/disconnected
+        let screen = bestScreen(for: model.frame)
+        updateWindowSizeLimits(for: screen)
+        let frame = StickyWindowGeometry.runtimeFrame(
+            model.frame,
+            visibleFrame: screen?.visibleFrame
+        )
+        setPanelFrame(frame, display: true)
+        syncFrame(persist: frame != model.frame)
         panel.orderFront(nil) // normal ordering — other apps can cover it
     }
 
-    /// Ensures the whole window frame sits within the visible screen area.
-    private func clampToScreen() {
-        guard let visible = (panel.screen ?? NSScreen.main)?.visibleFrame else { return }
-        var f = panel.frame
-        f.size.width = min(f.width, visible.width)
-        f.size.height = min(f.height, visible.height)
-        f.origin.x = min(max(f.origin.x, visible.minX), visible.maxX - f.width)
-        f.origin.y = min(max(f.origin.y, visible.minY), visible.maxY - f.height)
-        guard f != panel.frame else { return }
-        panel.setFrame(f, display: true)
+    /// Finds the display that owns the largest part of a frame. A completely
+    /// off-screen frame (for example after disconnecting a monitor) heals onto
+    /// the main display.
+    private func bestScreen(for frame: NSRect) -> NSScreen? {
+        let candidates = NSScreen.screens.map { screen in
+            (screen, frame.intersection(screen.visibleFrame).area)
+        }
+        if let best = candidates.max(by: { $0.1 < $1.1 }), best.1 > 0 {
+            return best.0
+        }
+        return NSScreen.main ?? NSScreen.screens.first
+    }
+
+    private func updateWindowSizeLimits(for screen: NSScreen?) {
+        let maximumHeight = StickyWindowGeometry.effectiveMaximumHeight(
+            screen?.visibleFrame.height ?? StickyWindowGeometry.maximumSafeHeight
+        )
+        // Frame-space constraints match the frame-space geometry persisted by
+        // the model. The panel is borderless today, but the coordinate contract
+        // remains explicit if its style changes later.
+        panel.minSize = StickyWindowGeometry.minimumSize
+        panel.maxSize = NSSize(width: StickyWindowGeometry.fixedWidth, height: maximumHeight)
+    }
+
+    private func setPanelFrame(_ frame: NSRect, display: Bool) {
+        guard panel.frame != frame else { return }
+        isRepairingFrame = true
+        panel.setFrame(frame, display: display)
+        isRepairingFrame = false
+    }
+
+    /// Repairs every programmatic frame path too. `setFrame(_:display:)`,
+    /// Accessibility window managers, and persisted initial frames bypass
+    /// AppKit's min/max constraints and the resize delegate.
+    private func repairCurrentFrame(keepFullyVisible: Bool, persist: Bool) {
+        guard !isRepairingFrame else { return }
+        let screen = panel.screen ?? bestScreen(for: panel.frame)
+        updateWindowSizeLimits(for: screen)
+
+        let repaired: NSRect
+        if keepFullyVisible {
+            repaired = StickyWindowGeometry.runtimeFrame(
+                panel.frame,
+                visibleFrame: screen?.visibleFrame
+            )
+        } else {
+            repaired = StickyWindowGeometry.runtimeFrame(
+                panel.frame,
+                maximumHeight: screen?.visibleFrame.height
+                    ?? StickyWindowGeometry.maximumSafeHeight
+            )
+        }
+
+        setPanelFrame(repaired, display: true)
+        syncFrame(persist: persist)
     }
 
     func hide() {
@@ -331,6 +388,7 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     func bringToFront() {
         if !model.isVisible { model.isVisible = true }
+        repairCurrentFrame(keepFullyVisible: true, persist: true)
         panel.makeKeyAndOrderFront(nil)
     }
 
@@ -426,8 +484,39 @@ final class StickyController: NSObject, NSWindowDelegate {
         completionUndoManager
     }
 
-    func windowDidMove(_ notification: Notification) { syncFrame() }
-    func windowDidResize(_ notification: Notification) { syncFrame() }
+    func windowDidMove(_ notification: Notification) {
+        guard !isRepairingFrame else { return }
+        syncFrame(persist: true)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard !isRepairingFrame else { return }
+        // Keep model geometry current for SwiftUI, but don't encode/write every
+        // sticky while the mouse is still held in a live resize session.
+        repairCurrentFrame(keepFullyVisible: false, persist: !panel.inLiveResize)
+    }
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        let screen = sender.screen ?? bestScreen(for: sender.frame)
+        updateWindowSizeLimits(for: screen)
+        return StickyWindowGeometry.constrainedSize(
+            frameSize,
+            maximumHeight: screen?.visibleFrame.height
+                ?? StickyWindowGeometry.maximumSafeHeight
+        )
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) {
+        updateWindowSizeLimits(for: panel.screen ?? bestScreen(for: panel.frame))
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        repairCurrentFrame(keepFullyVisible: true, persist: true)
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        repairCurrentFrame(keepFullyVisible: true, persist: true)
+    }
 
     /// Tracks "most recently active" from a plain click too, not just
     /// programmatic `bringToFront()` — so the global shortcut jumps to
@@ -444,8 +533,15 @@ final class StickyController: NSObject, NSWindowDelegate {
         model.onRequestLastItemFocus?()
     }
 
-    private func syncFrame() {
+    private func syncFrame(persist: Bool) {
         model.frame = panel.frame
-        manager?.scheduleSave()
+        if persist { manager?.scheduleSave() }
+    }
+}
+
+private extension CGRect {
+    var area: CGFloat {
+        guard !isNull, !isInfinite else { return 0 }
+        return max(width, 0) * max(height, 0)
     }
 }

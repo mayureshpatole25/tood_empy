@@ -47,6 +47,7 @@ struct StickyRootView: View {
     /// TextField size itself intrinsically, with no guess in the way, is
     /// what actually guarantees it never happens.
     @State private var availableWidth: CGFloat = 378
+    @State private var availableHeight: CGFloat = 490
 
     private let corner: CGFloat = 4
     private let contentInset: CGFloat = 24
@@ -70,9 +71,11 @@ struct StickyRootView: View {
                 Color.clear
                     .onAppear {
                         availableWidth = proxy.size.width
+                        availableHeight = proxy.size.height
                     }
                     .onChange(of: proxy.size) { _, newSize in
                         availableWidth = newSize.width
+                        availableHeight = newSize.height
                     }
             }
         )
@@ -317,6 +320,19 @@ struct StickyRootView: View {
                 guard let id else { return }
                 withAnimation(.easeOut(duration: 0.16)) {
                     proxy.scrollTo(id, anchor: .center)
+                }
+            }
+            .onChange(of: availableHeight) { _, _ in
+                // A live shrink or a newly wrapped title can move the existing
+                // caret outside the checklist viewport without changing focus.
+                // Keep that row visible, but don't animate every resize tick.
+                guard let focusedID,
+                      displayedItems.contains(where: { $0.id == focusedID })
+                else { return }
+                var transaction = Transaction(animation: nil)
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo(focusedID, anchor: .center)
                 }
             }
         }
@@ -767,6 +783,7 @@ struct StickyRootView: View {
             )
             .padding(.bottom, 16)
             .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
             .animation(.easeInOut(duration: 0.15), value: hovering)
         }
     }
