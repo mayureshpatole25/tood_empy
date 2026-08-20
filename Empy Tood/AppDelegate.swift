@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: HostedWindowController<SettingsView>?
     private var onboardingWindow: HostedWindowController<OnboardingView>?
     private var introWindow: HostedWindowController<IntroFallView>?
+    private var applicationShortcutMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Regular app: Dock icon visible, matches LSUIElement=false in
@@ -32,8 +33,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         registerBundledFonts()
         manager = StickyManager()
         journal = JournalStore()
+        manager.onOpenHome = { [weak self] in self?.showHome() }
         statusMenu = StatusMenuController(manager: manager, appDelegate: self)
         manager.restoreAll()
+
+        // These two commands must remain available even after the final
+        // sticky has been closed, when there is no key sticky window to
+        // receive the next keystroke.
+        applicationShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, AppSettings.shared.onboardingCompleted else { return event }
+            let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            guard modifiers == [.command, .shift] else { return event }
+
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "t":
+                self.manager.reopenLastClosedSticky()
+                return nil
+            case "h":
+                self.manager.openHome()
+                return nil
+            default:
+                return event
+            }
+        }
 
         GlobalHotKeyManager.shared.onShowSticky = { [weak self] in self?.manager.showActiveSticky() }
         GlobalHotKeyManager.shared.onNewSticky = { [weak self] in
@@ -72,6 +94,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         manager.saveNow()
+    }
+
+    deinit {
+        if let applicationShortcutMonitor { NSEvent.removeMonitor(applicationShortcutMonitor) }
     }
 
     // MARK: - Windows

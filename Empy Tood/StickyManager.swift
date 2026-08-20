@@ -23,6 +23,8 @@ final class StickyManager {
 
     @ObservationIgnored private var saveTimer: Timer?
     @ObservationIgnored private let lastActiveDefaultsKey = "today.lastActiveStickyID"
+    @ObservationIgnored private var recentlyClosedIDs: [UUID] = []
+    @ObservationIgnored var onOpenHome: (() -> Void)?
 
     init() {
         rollover = RolloverScheduler(onRollover: { [weak self] in self?.performRollover() })
@@ -86,6 +88,7 @@ final class StickyManager {
         controllers[id]?.panel.close()
         controllers[id] = nil
         order.removeAll { $0 == id }
+        recentlyClosedIDs.removeAll { $0 == id }
         scheduleSave()
     }
 
@@ -115,6 +118,28 @@ final class StickyManager {
 
     func showAll() { for c in controllers.values { c.show() } }
     func hideAll() { for c in controllers.values { c.hide() } }
+
+    /// Hides a sticky without deleting it and remembers the close order so
+    /// Shift-Command-T can restore windows just like reopening a closed tab.
+    func close(_ id: UUID) {
+        guard let controller = controllers[id], controller.model.isVisible else { return }
+        recentlyClosedIDs.removeAll { $0 == id }
+        recentlyClosedIDs.append(id)
+        controller.hide()
+    }
+
+    func reopenLastClosedSticky() {
+        while let id = recentlyClosedIDs.popLast() {
+            guard let controller = controllers[id], !controller.model.isVisible else { continue }
+            controller.focusForTyping()
+            noteActive(id)
+            return
+        }
+    }
+
+    func openHome() {
+        onOpenHome?()
+    }
 
     /// Deletes every sticky. Irreversible, same as closing one — the caller
     /// (the status menu) is responsible for confirming with the user first.
