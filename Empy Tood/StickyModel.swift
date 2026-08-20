@@ -4,6 +4,8 @@ import Observation
 /// Plain `Codable` snapshot written to disk. Kept separate from the runtime
 /// `@Observable` model because the Observation macro doesn't encode cleanly.
 struct StickyData: Codable, Identifiable {
+    static let defaultSize = StickyWindowGeometry.defaultSize
+
     var id: UUID
     var title: String
     /// Leftover from a short-lived separate icon field — some stickies were
@@ -72,7 +74,11 @@ final class StickyModel: Identifiable {
         self.items = data.items
         self.colorID = data.colorID
         self.fontID = data.fontID
-        self.frame = data.frame
+        // Persisted window geometry is untrusted input. AppKit can construct a
+        // 0×0 window from negative dimensions and can throw while constructing
+        // an absurdly large one, so repair it before StickyController creates
+        // the panel. Valid user-selected heights are preserved.
+        self.frame = StickyWindowGeometry.persistedFrame(data.frame)
         self.isVisible = data.isVisible
 
         // Merge a split-out icon straight back into the title, exactly as
@@ -89,7 +95,9 @@ final class StickyModel: Identifiable {
 
     func snapshot() -> StickyData {
         StickyData(id: id, title: title, emoji: nil, day: day, items: items,
-                   colorID: colorID, fontID: fontID, frame: frame, isVisible: isVisible)
+                   colorID: colorID, fontID: fontID,
+                   frame: StickyWindowGeometry.runtimeFrame(frame),
+                   isVisible: isVisible)
     }
 
     // MARK: - Ordering
@@ -196,7 +204,7 @@ final class StickyModel: Identifiable {
             items: [TodoItem()], // start with one empty line, ready to type
             colorID: color,
             fontID: font,
-            frame: CGRect(x: origin.x, y: origin.y, width: 378, height: 490),
+            frame: CGRect(origin: origin, size: StickyData.defaultSize),
             isVisible: true
         )
         return StickyModel(data: data)

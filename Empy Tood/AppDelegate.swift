@@ -81,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             homeWindow = HostedWindowController(
                 title: AppIdentity.displayName,
                 size: NSSize(width: 900, height: 640),
+                minimumSize: HomeView.minimumSize,
                 hidesTitleBar: true,
                 content: HomeView(manager: manager, journal: journal)
             )

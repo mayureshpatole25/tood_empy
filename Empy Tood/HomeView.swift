@@ -19,6 +19,10 @@ enum DeskCardMetrics {
 /// Reads directly off `StickyManager`/`JournalStore` (the same source of
 /// truth the floating stickies and journal itself use), so it updates live.
 struct HomeView: View {
+    // The fixed card fan, focus control, greeting, actions, and a two-line
+    // announcement all fit without compression at this content size.
+    static let minimumSize = CGSize(width: 720, height: 600)
+
     let manager: StickyManager
     let journal: JournalStore
 
@@ -60,7 +64,10 @@ struct HomeView: View {
                 .padding(.bottom, 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
-        .frame(minWidth: 820, minHeight: 600)
+        // AppKit owns the actual window minimum. Keeping SwiftUI flexible here
+        // prevents NSHostingView from adding the hidden-titlebar safe-area to
+        // that minimum (which used to turn a declared 520pt limit into 552pt).
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .sheet(isPresented: $showingArchive) {
             ArchivedStickiesView(manager: manager, onDone: { showingArchive = false })
         }

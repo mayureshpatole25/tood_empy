@@ -279,8 +279,8 @@ final class StickyManager {
     private func cascadeOrigin() -> CGPoint {
         guard let screen = NSScreen.main else { return CGPoint(x: 200, y: 200) }
         let visible = screen.visibleFrame
-        let cardWidth: CGFloat = 378
-        let cardHeight: CGFloat = 490
+        let cardWidth = StickyWindowGeometry.defaultSize.width
+        let cardHeight = StickyWindowGeometry.defaultSize.height
         let gutter: CGFloat = 24
         let rowStep: CGFloat = 210 // << cardHeight — rows overlap like a fanned stack
 

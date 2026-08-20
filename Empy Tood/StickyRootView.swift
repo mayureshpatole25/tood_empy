@@ -46,11 +46,19 @@ struct StickyRootView: View {
     /// title text still in the data, invisibly cut from view. Letting the
     /// TextField size itself intrinsically, with no guess in the way, is
     /// what actually guarantees it never happens.
-    @State private var availableWidth: CGFloat = 378
+    @State private var availableWidth: CGFloat
+    @State private var availableHeight: CGFloat
 
     private let corner: CGFloat = 4
     private let contentInset: CGFloat = 24
     private var color: StickyColor { model.color }
+
+    init(model: StickyModel, controller: StickyController) {
+        self.model = model
+        self.controller = controller
+        _availableWidth = State(initialValue: model.frame.width)
+        _availableHeight = State(initialValue: model.frame.height)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -70,9 +78,11 @@ struct StickyRootView: View {
                 Color.clear
                     .onAppear {
                         availableWidth = proxy.size.width
+                        availableHeight = proxy.size.height
                     }
                     .onChange(of: proxy.size) { _, newSize in
                         availableWidth = newSize.width
+                        availableHeight = newSize.height
                     }
             }
         )
@@ -175,7 +185,7 @@ struct StickyRootView: View {
                 .font(bodyFont(14))
                 .foregroundStyle(color.ink.opacity(0.3))
 
-            // Gives the title an explicit, fixed width budget — an
+            // Gives the title an explicit maximum width budget — an
             // unconstrained TextField's ideal width just grows with its
             // content, so measuring that was circular and never actually
             // constrained anything (titles kept wrapping mid-word
@@ -213,7 +223,12 @@ struct StickyRootView: View {
                 .onKeyPress(.return) { .handled }
                 .focused($titleFocused)
                 .padding(.trailing, 6) // headroom for negative tracking on the last glyph
-                .frame(width: titleWidth, alignment: .topLeading)
+                // A fixed frame here makes the hosting view advertise the
+                // current window width as its minimum. That turns every
+                // horizontal expansion into a one-way ratchet. A flexible
+                // maximum still gives wrapping a concrete budget without
+                // preventing the native window from becoming narrower again.
+                .frame(minWidth: 0, maxWidth: titleWidth, alignment: .topLeading)
         }
     }
 
@@ -319,8 +334,31 @@ struct StickyRootView: View {
                     proxy.scrollTo(id, anchor: .center)
                 }
             }
+            .onChange(of: availableHeight) { _, _ in
+                // A live shrink or a newly wrapped title can move the existing
+                // caret outside the checklist viewport without changing focus.
+                // Keep that row visible, but don't animate every resize tick.
+                keepFocusedRowVisible(using: proxy)
+            }
+            .onChange(of: availableWidth) { _, _ in
+                // Narrowing wraps both the title and checklist rows. Their
+                // changed heights can displace the caret even though the
+                // window's vertical dimension did not move.
+                keepFocusedRowVisible(using: proxy)
+            }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    private func keepFocusedRowVisible(using proxy: ScrollViewProxy) {
+        guard let focusedID,
+              displayedItems.contains(where: { $0.id == focusedID })
+        else { return }
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            proxy.scrollTo(focusedID, anchor: .center)
+        }
     }
 
     private var doneTaskCount: Int {
@@ -767,6 +805,7 @@ struct StickyRootView: View {
             )
             .padding(.bottom, 16)
             .opacity(hovering ? 1 : 0)
+            .allowsHitTesting(hovering)
             .animation(.easeInOut(duration: 0.15), value: hovering)
         }
     }
