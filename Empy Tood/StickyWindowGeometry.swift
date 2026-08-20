@@ -8,47 +8,54 @@ import Foundation
 /// bypasses them, so every persisted and programmatic frame also comes through
 /// this policy before it reaches `NSWindow`.
 enum StickyWindowGeometry {
-    static let fixedWidth: CGFloat = 378
+    static let defaultWidth: CGFloat = 378
+    static let minimumWidth: CGFloat = 280
     static let defaultHeight: CGFloat = 490
     static let minimumHeight: CGFloat = 400
 
-    /// Large enough for any real display while preventing corrupt persisted
-    /// geometry from reaching AppKit as a gigantic allocation.
+    /// Large enough for any real display while preventing individually corrupt
+    /// dimensions from reaching AppKit unchecked. StickyController additionally
+    /// clamps the combined size to a real display before constructing NSWindow.
+    static let maximumSafeWidth: CGFloat = 16_384
     static let maximumSafeHeight: CGFloat = 16_384
     static let maximumSafeCoordinateMagnitude: CGFloat = 1_000_000
 
     /// Mouse-downs inside this perimeter belong to AppKit's native resize
     /// tracking, never to the custom draggable header.
-    static let nativeResizeEdgeInset: CGFloat = 8
+    static let nativeResizeEdgeInset: CGFloat = 12
 
-    static let defaultSize = CGSize(width: fixedWidth, height: defaultHeight)
-    static let minimumSize = CGSize(width: fixedWidth, height: minimumHeight)
+    static let defaultSize = CGSize(width: defaultWidth, height: defaultHeight)
+    static let minimumSize = CGSize(width: minimumWidth, height: minimumHeight)
+    static let maximumSafeSize = CGSize(width: maximumSafeWidth, height: maximumSafeHeight)
 
     /// Sanitizes data loaded from disk before an `NSWindow` is constructed.
-    /// A paper-thin or otherwise corrupt legacy height reopens at the normal
-    /// default height; an intentional, valid user-selected height survives.
+    /// A paper-thin or otherwise corrupt legacy size reopens at the normal
+    /// default on that axis; intentional user-selected dimensions survive.
     static func persistedFrame(_ frame: CGRect) -> CGRect {
         normalizedFrame(
             frame,
-            maximumHeight: maximumSafeHeight,
-            invalidHeightFallback: defaultHeight,
+            maximumSize: maximumSafeSize,
+            invalidSizeFallback: defaultSize,
             visibleFrame: nil
         )
     }
 
     /// Constrains a live/programmatic size. Unlike persisted corruption, a
-    /// resize below the lower bound stops exactly at the declared minimum.
+    /// resize below either lower bound stops exactly at the declared minimum.
     static func constrainedSize(
         _ proposedSize: CGSize,
-        maximumHeight requestedMaximumHeight: CGFloat = maximumSafeHeight
+        maximumSize requestedMaximumSize: CGSize = maximumSafeSize
     ) -> CGSize {
-        let maximumHeight = safeMaximumHeight(requestedMaximumHeight)
+        let maximumSize = safeMaximumSize(requestedMaximumSize)
+        let proposedWidth = proposedSize.width.isFinite && proposedSize.width > 0
+            ? proposedSize.width
+            : defaultWidth
         let proposedHeight = proposedSize.height.isFinite && proposedSize.height > 0
             ? proposedSize.height
             : defaultHeight
         return CGSize(
-            width: fixedWidth,
-            height: min(max(proposedHeight, minimumHeight), maximumHeight)
+            width: min(max(proposedWidth, minimumWidth), maximumSize.width),
+            height: min(max(proposedHeight, minimumHeight), maximumSize.height)
         )
     }
 
@@ -58,25 +65,25 @@ enum StickyWindowGeometry {
     static func runtimeFrame(_ frame: CGRect, visibleFrame: CGRect? = nil) -> CGRect {
         normalizedFrame(
             frame,
-            maximumHeight: visibleFrame?.height ?? maximumSafeHeight,
-            invalidHeightFallback: minimumHeight,
+            maximumSize: visibleFrame?.size ?? maximumSafeSize,
+            invalidSizeFallback: minimumSize,
             visibleFrame: visibleFrame
         )
     }
 
     /// Repairs size without changing an otherwise valid position. Used while
     /// a native live resize is in progress, when AppKit owns the anchored edge.
-    static func runtimeFrame(_ frame: CGRect, maximumHeight: CGFloat) -> CGRect {
+    static func runtimeFrame(_ frame: CGRect, maximumSize: CGSize) -> CGRect {
         normalizedFrame(
             frame,
-            maximumHeight: maximumHeight,
-            invalidHeightFallback: minimumHeight,
+            maximumSize: maximumSize,
+            invalidSizeFallback: minimumSize,
             visibleFrame: nil
         )
     }
 
-    static func effectiveMaximumHeight(_ proposed: CGFloat) -> CGFloat {
-        safeMaximumHeight(proposed)
+    static func effectiveMaximumSize(_ proposed: CGSize) -> CGSize {
+        safeMaximumSize(proposed)
     }
 
     static func isInNativeResizePerimeter(_ point: CGPoint, bounds: CGRect) -> Bool {
@@ -90,21 +97,36 @@ enum StickyWindowGeometry {
 
     private static func normalizedFrame(
         _ frame: CGRect,
-        maximumHeight requestedMaximumHeight: CGFloat,
-        invalidHeightFallback: CGFloat,
+        maximumSize requestedMaximumSize: CGSize,
+        invalidSizeFallback: CGSize,
         visibleFrame requestedVisibleFrame: CGRect?
     ) -> CGRect {
         let visibleFrame = validVisibleFrame(requestedVisibleFrame)
-        let maximumHeight = safeMaximumHeight(visibleFrame?.height ?? requestedMaximumHeight)
+        let maximumSize = safeMaximumSize(visibleFrame?.size ?? requestedMaximumSize)
+
+        var targetWidth: CGFloat
+        if isSafeDimension(frame.width, upperBound: maximumSafeWidth), frame.width >= minimumWidth {
+            targetWidth = min(frame.width, maximumSize.width)
+        } else {
+            targetWidth = min(
+                max(invalidSizeFallback.width, minimumWidth),
+                maximumSize.width
+            )
+        }
 
         let sourceHeight: CGFloat
-        let targetHeight: CGFloat
-        if isSafeDimension(frame.height), frame.height >= minimumHeight {
+        var targetHeight: CGFloat
+        if isSafeDimension(frame.height, upperBound: maximumSafeHeight), frame.height >= minimumHeight {
             sourceHeight = frame.height
-            targetHeight = min(frame.height, maximumHeight)
+            targetHeight = min(frame.height, maximumSize.height)
         } else {
-            sourceHeight = isSafeDimension(frame.height) ? frame.height : invalidHeightFallback
-            targetHeight = min(max(invalidHeightFallback, minimumHeight), maximumHeight)
+            sourceHeight = isSafeDimension(frame.height, upperBound: maximumSafeHeight)
+                ? frame.height
+                : invalidSizeFallback.height
+            targetHeight = min(
+                max(invalidSizeFallback.height, minimumHeight),
+                maximumSize.height
+            )
         }
 
         var x = safeCoordinate(frame.origin.x, fallback: visibleFrame?.minX ?? 0)
@@ -113,13 +135,13 @@ enum StickyWindowGeometry {
         var y = sourceTop - targetHeight
 
         if let visibleFrame {
-            if fixedWidth <= visibleFrame.width {
-                x = min(max(x, visibleFrame.minX), visibleFrame.maxX - fixedWidth)
+            if targetWidth <= visibleFrame.width {
+                x = min(max(x, visibleFrame.minX), visibleFrame.maxX - targetWidth)
             } else {
-                // An exceptionally narrow display cannot satisfy both fixed
-                // width and full visibility. Centering keeps both sides equally
-                // reachable instead of feeding a reversed clamp range.
-                x = visibleFrame.midX - (fixedWidth / 2)
+                // An exceptionally narrow display cannot satisfy both the
+                // minimum width and full visibility. Centering keeps both sides
+                // equally reachable instead of feeding a reversed clamp range.
+                x = visibleFrame.midX - (targetWidth / 2)
             }
 
             if targetHeight <= visibleFrame.height {
@@ -130,7 +152,19 @@ enum StickyWindowGeometry {
             }
         }
 
-        return CGRect(x: x, y: y, width: fixedWidth, height: targetHeight)
+        return CGRect(x: x, y: y, width: targetWidth, height: targetHeight)
+    }
+
+    private static func safeMaximumSize(_ proposed: CGSize) -> CGSize {
+        CGSize(
+            width: safeMaximumWidth(proposed.width),
+            height: safeMaximumHeight(proposed.height)
+        )
+    }
+
+    private static func safeMaximumWidth(_ proposed: CGFloat) -> CGFloat {
+        guard proposed.isFinite, proposed > 0 else { return maximumSafeWidth }
+        return min(max(proposed, minimumWidth), maximumSafeWidth)
     }
 
     private static func safeMaximumHeight(_ proposed: CGFloat) -> CGFloat {
@@ -138,8 +172,8 @@ enum StickyWindowGeometry {
         return min(max(proposed, minimumHeight), maximumSafeHeight)
     }
 
-    private static func isSafeDimension(_ value: CGFloat) -> Bool {
-        value.isFinite && value > 0 && value <= maximumSafeHeight
+    private static func isSafeDimension(_ value: CGFloat, upperBound: CGFloat) -> Bool {
+        value.isFinite && value > 0 && value <= upperBound
     }
 
     private static func safeCoordinate(_ value: CGFloat, fallback: CGFloat) -> CGFloat {

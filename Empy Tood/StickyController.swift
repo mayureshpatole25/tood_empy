@@ -28,7 +28,25 @@ final class StickyController: NSObject, NSWindowDelegate {
     private var isRepairingFrame = false
 
     init(model: StickyModel, manager: StickyManager) {
-        model.frame = StickyWindowGeometry.persistedFrame(model.frame)
+        let persistedFrame = StickyWindowGeometry.persistedFrame(model.frame)
+        // Both dimensions are now user-controlled, so an individually valid
+        // width and height can still combine into an unsafe initial backing
+        // allocation. Clamp to the owning display before NSWindow exists.
+        let initialScreen = Self.bestScreen(for: persistedFrame)
+        if let initialScreen {
+            model.frame = StickyWindowGeometry.runtimeFrame(
+                persistedFrame,
+                visibleFrame: initialScreen.visibleFrame
+            )
+        } else {
+            // A GUI session should always have a screen. Keep headless/test
+            // launches bounded too instead of constructing a maximum-size
+            // backing store when no trustworthy display geometry exists.
+            model.frame = StickyWindowGeometry.runtimeFrame(
+                persistedFrame,
+                maximumSize: StickyWindowGeometry.defaultSize
+            )
+        }
         self.model = model
         self.manager = manager
         self.panel = StickyPanel(frameRect: model.frame)
@@ -36,8 +54,8 @@ final class StickyController: NSObject, NSWindowDelegate {
 
         let root = StickyRootView(model: model, controller: self)
         hosting = NSHostingView(rootView: root)
-        // The window owns its geometry; the sticky width is deliberately fixed
-        // while its height remains vertically resizable.
+        // The window owns both resizable dimensions. SwiftUI responds to the
+        // available content size but never writes constraints back to AppKit.
         hosting.sizingOptions = []
         hosting.frame = NSRect(origin: .zero, size: panel.contentLayoutRect.size)
         hosting.autoresizingMask = [.width, .height]
@@ -312,7 +330,7 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     func show() {
         model.isVisible = true
-        let screen = bestScreen(for: model.frame)
+        let screen = Self.bestScreen(for: model.frame)
         updateWindowSizeLimits(for: screen)
         let frame = StickyWindowGeometry.runtimeFrame(
             model.frame,
@@ -326,7 +344,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// Finds the display that owns the largest part of a frame. A completely
     /// off-screen frame (for example after disconnecting a monitor) heals onto
     /// the main display.
-    private func bestScreen(for frame: NSRect) -> NSScreen? {
+    private static func bestScreen(for frame: NSRect) -> NSScreen? {
         let candidates = NSScreen.screens.map { screen in
             (screen, frame.intersection(screen.visibleFrame).area)
         }
@@ -337,14 +355,14 @@ final class StickyController: NSObject, NSWindowDelegate {
     }
 
     private func updateWindowSizeLimits(for screen: NSScreen?) {
-        let maximumHeight = StickyWindowGeometry.effectiveMaximumHeight(
-            screen?.visibleFrame.height ?? StickyWindowGeometry.maximumSafeHeight
+        let maximumSize = StickyWindowGeometry.effectiveMaximumSize(
+            screen?.visibleFrame.size ?? StickyWindowGeometry.maximumSafeSize
         )
         // Frame-space constraints match the frame-space geometry persisted by
         // the model. The panel is borderless today, but the coordinate contract
         // remains explicit if its style changes later.
         panel.minSize = StickyWindowGeometry.minimumSize
-        panel.maxSize = NSSize(width: StickyWindowGeometry.fixedWidth, height: maximumHeight)
+        panel.maxSize = maximumSize
     }
 
     private func setPanelFrame(_ frame: NSRect, display: Bool) {
@@ -359,7 +377,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// AppKit's min/max constraints and the resize delegate.
     private func repairCurrentFrame(keepFullyVisible: Bool, persist: Bool) {
         guard !isRepairingFrame else { return }
-        let screen = panel.screen ?? bestScreen(for: panel.frame)
+        let screen = panel.screen ?? Self.bestScreen(for: panel.frame)
         updateWindowSizeLimits(for: screen)
 
         let repaired: NSRect
@@ -371,8 +389,8 @@ final class StickyController: NSObject, NSWindowDelegate {
         } else {
             repaired = StickyWindowGeometry.runtimeFrame(
                 panel.frame,
-                maximumHeight: screen?.visibleFrame.height
-                    ?? StickyWindowGeometry.maximumSafeHeight
+                maximumSize: screen?.visibleFrame.size
+                    ?? StickyWindowGeometry.maximumSafeSize
             )
         }
 
@@ -492,22 +510,25 @@ final class StickyController: NSObject, NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {
         guard !isRepairingFrame else { return }
         // Keep model geometry current for SwiftUI, but don't encode/write every
-        // sticky while the mouse is still held in a live resize session.
-        repairCurrentFrame(keepFullyVisible: false, persist: !panel.inLiveResize)
+        // sticky while the mouse is still held in a live resize session. AX
+        // and other programmatic resizes are not live sessions, so repair their
+        // position immediately as well as their size.
+        let isLiveResize = panel.inLiveResize
+        repairCurrentFrame(keepFullyVisible: !isLiveResize, persist: !isLiveResize)
     }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        let screen = sender.screen ?? bestScreen(for: sender.frame)
+        let screen = sender.screen ?? Self.bestScreen(for: sender.frame)
         updateWindowSizeLimits(for: screen)
         return StickyWindowGeometry.constrainedSize(
             frameSize,
-            maximumHeight: screen?.visibleFrame.height
-                ?? StickyWindowGeometry.maximumSafeHeight
+            maximumSize: screen?.visibleFrame.size
+                ?? StickyWindowGeometry.maximumSafeSize
         )
     }
 
     func windowWillStartLiveResize(_ notification: Notification) {
-        updateWindowSizeLimits(for: panel.screen ?? bestScreen(for: panel.frame))
+        updateWindowSizeLimits(for: panel.screen ?? Self.bestScreen(for: panel.frame))
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {

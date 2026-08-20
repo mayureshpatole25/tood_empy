@@ -2,10 +2,9 @@ import AppKit
 
 /// A borderless, rounded sticky window. It sits at the normal window level so
 /// clicking another app covers it (not always-on-top), and it stays in the
-/// Space where the user placed it. Width is fixed at the default while AppKit
-/// retains native vertical resizing. The SwiftUI paper is the only corner
-/// mask, so all four corners stay identical. No shadow — the sticky is flat,
-/// edge-to-edge paper.
+/// Space where the user placed it. AppKit retains native resizing on every
+/// edge and corner. The SwiftUI paper is the only corner mask, so all four
+/// corners stay identical. No shadow — the sticky is flat, edge-to-edge paper.
 final class StickyPanel: NSWindow {
 
     private static let panelStyleMask: NSWindow.StyleMask = [
@@ -52,10 +51,7 @@ final class StickyPanel: NSWindow {
         backgroundColor = .clear
         hasShadow = false
         minSize = Self.minimumSize
-        maxSize = NSSize(
-            width: StickyWindowGeometry.fixedWidth,
-            height: StickyWindowGeometry.maximumSafeHeight
-        )
+        maxSize = StickyWindowGeometry.maximumSafeSize
 
         // Window movement is routed explicitly in `sendEvent`. Letting
         // AppKit treat the whole paper as movable steals drag gestures from
