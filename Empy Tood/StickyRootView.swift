@@ -102,7 +102,7 @@ struct StickyRootView: View {
         }
         .onAppear {
             reduceMotionEnabled = accessibilityReduceMotion
-            focusedID = displayedItems.first?.id
+            focusedID = nil
             model.focusedItemID = focusedID
             model.onSplitTitle = { caret in
                 splitTitle(atUTF16Offset: caret)
@@ -132,6 +132,7 @@ struct StickyRootView: View {
             model.onWillSetDone = { id, isDone in
                 prepareDoneTransition(id: id, isDone: isDone)
             }
+            focusLastItemForTyping()
         }
         .onDisappear {
             model.onWillSetDone = nil
