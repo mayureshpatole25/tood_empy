@@ -37,12 +37,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusMenu = StatusMenuController(manager: manager, appDelegate: self)
         manager.restoreAll()
 
-        // These two commands must remain available even after the final
-        // sticky has been closed, when there is no key sticky window to
-        // receive the next keystroke.
+        // App-wide shortcuts must remain available even when Home or Settings
+        // is key, rather than relying on a particular sticky's event monitor.
         applicationShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, AppSettings.shared.onboardingCompleted else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+
+            if modifiers == [.control],
+               let key = event.charactersIgnoringModifiers?.lowercased(),
+               let index = StickySelectionShortcut.stickyIndex(forKeyEquivalent: key),
+               self.manager.focusSticky(atShortcutIndex: index) {
+                return nil
+            }
+
             guard modifiers == [.command, .shift] else { return event }
 
             switch event.charactersIgnoringModifiers?.lowercased() {

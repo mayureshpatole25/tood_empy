@@ -182,6 +182,19 @@ final class StickyManager {
         noteActive(id)
     }
 
+    /// Focuses one of the first ten stickies in the same creation order used
+    /// by the status menu. Returns false when that numbered slot is empty so
+    /// an otherwise unrelated Control-number event can continue normally.
+    @discardableResult
+    func focusSticky(atShortcutIndex index: Int) -> Bool {
+        guard (0..<StickySelectionShortcut.maximumStickyCount).contains(index),
+              order.indices.contains(index),
+              let controller = controllers[order[index]] else { return false }
+        controller.focusForTyping()
+        noteActive(controller.model.id)
+        return true
+    }
+
     /// Called by `StickyController` (bringToFront, or the window becoming
     /// key from a plain click) so "show active sticky" always jumps to
     /// whichever one you actually used last.
