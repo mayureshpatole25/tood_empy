@@ -76,7 +76,7 @@ final class StickyManager {
         let origin = cascadeOrigin()
         let model = StickyModel.makeNew(at: origin, color: .nextNewStickyColor())
         addController(for: model)
-        controllers[model.id]?.bringToFront()
+        controllers[model.id]?.focusForTyping()
         noteActive(model.id)
         scheduleSave()
     }
@@ -108,7 +108,7 @@ final class StickyManager {
         let model = StickyModel(data: data)
         addController(for: model)
         stickyArchive.delete(entry.id)
-        controllers[model.id]?.bringToFront()
+        controllers[model.id]?.focusForTyping()
         noteActive(model.id)
         saveNow()
     }
@@ -123,7 +123,7 @@ final class StickyManager {
     }
 
     func bringToFront(_ id: UUID) {
-        controllers[id]?.bringToFront()
+        controllers[id]?.focusForTyping()
         noteActive(id)
     }
 

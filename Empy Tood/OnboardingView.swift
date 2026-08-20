@@ -131,7 +131,7 @@ struct OnboardingView: View {
             let model = manager.controllers[id]?.model
             model?.setColor(color ?? .pink)
             model?.setFont(font)
-            manager.controllers[id]?.bringToFront()
+            manager.controllers[id]?.focusForTyping()
             previewSticky = model
             itemFieldFocused = true
         }

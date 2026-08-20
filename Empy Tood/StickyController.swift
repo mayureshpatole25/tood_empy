@@ -410,14 +410,12 @@ final class StickyController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// The global "show active sticky" shortcut: front the window, activate
-    /// the app (it's `.accessory` — just ordering the window front doesn't
-    /// steal keyboard focus from whatever app was frontmost), then move
-    /// focus into the first unfinished row so typing works immediately.
+    /// Fronts the window, activates the app, then moves focus to the end of
+    /// the last visible checklist item so typing resumes where the list ends.
     func focusForTyping() {
         bringToFront()
         NSApp.activate(ignoringOtherApps: true)
-        DispatchQueue.main.async { [weak self] in self?.model.onRequestFocus?() }
+        DispatchQueue.main.async { [weak self] in self?.model.onRequestLastItemFocus?() }
     }
 
     // MARK: - Actions surfaced to the SwiftUI content
