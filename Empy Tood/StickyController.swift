@@ -13,6 +13,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     let model: StickyModel
     let panel: StickyPanel
     private weak var manager: StickyManager?
+    private let completionUndoManager = UndoManager()
     private var keyMonitor: Any?
     private var selectionObserver: NSObjectProtocol?
     private var deminiaturizeObserver: NSObjectProtocol?
@@ -22,7 +23,7 @@ final class StickyController: NSObject, NSWindowDelegate {
     }
 
     private var pendingCaretPlacement: PendingCaretPlacement?
-    private var hosting: StickyHostingView!
+    private var hosting: NSHostingView<StickyRootView>!
     private var frameBeforeExpansion: NSRect?
 
     init(model: StickyModel, manager: StickyManager) {
@@ -32,7 +33,7 @@ final class StickyController: NSObject, NSWindowDelegate {
         super.init()
 
         let root = StickyRootView(model: model, controller: self)
-        hosting = StickyHostingView(rootView: root)
+        hosting = NSHostingView(rootView: root)
         hosting.frame = panel.contentLayoutRect
         hosting.autoresizingMask = [.width, .height]
         panel.contentView = hosting
@@ -73,6 +74,19 @@ final class StickyController: NSObject, NSWindowDelegate {
         // system-wide hotkey would.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.panel else { return event }
+
+            let commandModifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+            let pressedKey = event.charactersIgnoringModifiers?.lowercased()
+            if pressedKey == "z", commandModifiers == .command,
+               self.completionUndoManager.canUndo {
+                self.completionUndoManager.undo()
+                return nil
+            }
+            if pressedKey == "z", commandModifiers == [.command, .shift],
+               self.completionUndoManager.canRedo {
+                self.completionUndoManager.redo()
+                return nil
+            }
 
             if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "n" {
                 self.manager?.newSticky()
@@ -334,6 +348,28 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     func requestNewSticky() { manager?.newSticky() }
 
+    var isReplayingCompletionHistory: Bool {
+        completionUndoManager.isUndoing || completionUndoManager.isRedoing
+    }
+
+    func toggleDone(_ id: UUID) {
+        guard let item = model.items.first(where: { $0.id == id }) else { return }
+        let isDone = !item.isDone
+        setDone(id, isDone: isDone, completedAt: isDone ? Date() : nil)
+    }
+
+    private func setDone(_ id: UUID, isDone: Bool, completedAt: Date?) {
+        guard let item = model.items.first(where: { $0.id == id }) else { return }
+        let priorIsDone = item.isDone
+        let priorCompletedAt = item.completedAt
+
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.setDone(id, isDone: priorIsDone, completedAt: priorCompletedAt)
+        }
+        completionUndoManager.setActionName(isDone ? "Complete Task" : "Reopen Task")
+        model.setDone(id, isDone: isDone, completedAt: completedAt)
+    }
+
     /// Genie-effect minimizes to the Dock, same as any other window —
     /// unlike closing, this doesn't delete the sticky.
     func minimizeSticky() { panel.miniaturize(nil) }
@@ -386,6 +422,10 @@ final class StickyController: NSObject, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate (frame sync)
 
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        completionUndoManager
+    }
+
     func windowDidMove(_ notification: Notification) { syncFrame() }
     func windowDidResize(_ notification: Notification) { syncFrame() }
 
@@ -407,31 +447,5 @@ final class StickyController: NSObject, NSWindowDelegate {
     private func syncFrame() {
         model.frame = panel.frame
         manager?.scheduleSave()
-    }
-}
-
-/// Adds a resize cursor along the sticky's draggable edges. Plain
-/// `NSHostingView` doesn't manage cursor rects at all, and AppKit only
-/// recomputes them when it feels like it — after a *programmatic* resize
-/// (`growBy`/`collapse`, not a live mouse drag) the old rects, sized for
-/// the sticky's previous bounds, were left standing: the resize cursor
-/// silently stopped appearing past wherever the sticky's height last
-/// changed by hand, even though `StickyPanel`'s own hit-testing (computed
-/// fresh on every click) kept resizing just fine. Forcing an invalidation
-/// on every layout pass keeps the two in sync.
-final class StickyHostingView: NSHostingView<StickyRootView> {
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        let edge = StickyPanel.resizeEdge
-        let b = bounds
-        addCursorRect(NSRect(x: 0, y: 0, width: edge, height: b.height), cursor: .resizeLeftRight)
-        addCursorRect(NSRect(x: b.width - edge, y: 0, width: edge, height: b.height), cursor: .resizeLeftRight)
-        addCursorRect(NSRect(x: 0, y: 0, width: b.width, height: edge), cursor: .resizeUpDown)
-        addCursorRect(NSRect(x: 0, y: b.height - edge, width: b.width, height: edge), cursor: .resizeUpDown)
-    }
-
-    override func layout() {
-        super.layout()
-        window?.invalidateCursorRects(for: self)
     }
 }

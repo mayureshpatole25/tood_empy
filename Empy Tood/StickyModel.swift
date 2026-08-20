@@ -37,6 +37,10 @@ final class StickyModel: Identifiable {
     /// Called on any change that should be persisted (routed to the manager).
     @ObservationIgnored var onChange: (() -> Void)?
 
+    /// Gives the view a chance to stage completion visibility before the
+    /// persisted values change. The Bool is the exact incoming done state.
+    @ObservationIgnored var onWillSetDone: ((UUID, Bool) -> Void)?
+
     /// Mirrors the SwiftUI `@FocusState` so AppKit-level key handling (which
     /// can't see FocusState) knows which row is focused. Not persisted.
     @ObservationIgnored var focusedItemID: UUID?
@@ -141,13 +145,34 @@ final class StickyModel: Identifiable {
 
     func toggle(_ id: UUID) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
-        items[idx].isDone.toggle()
-        items[idx].completedAt = items[idx].isDone ? Date() : nil
+        let isDone = !items[idx].isDone
+        setDone(id, isDone: isDone, completedAt: isDone ? Date() : nil)
+    }
+
+    func setDone(_ id: UUID, isDone: Bool, completedAt: Date?) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        onWillSetDone?(id, isDone)
+        items[idx].isDone = isDone
+        items[idx].completedAt = completedAt
         onChange?()
     }
 
     func delete(_ id: UUID) {
         items.removeAll { $0.id == id }
+        onChange?()
+    }
+
+    /// Moves one row through the source-of-truth array. Reordering relative
+    /// to an item (rather than a visible index) keeps the operation correct
+    /// when completed rows are currently hidden from the checklist.
+    func moveItem(_ id: UUID, relativeTo targetID: UUID) {
+        guard id != targetID,
+              let sourceIndex = items.firstIndex(where: { $0.id == id }),
+              let targetIndex = items.firstIndex(where: { $0.id == targetID })
+        else { return }
+
+        let item = items.remove(at: sourceIndex)
+        items.insert(item, at: min(targetIndex, items.endIndex))
         onChange?()
     }
 

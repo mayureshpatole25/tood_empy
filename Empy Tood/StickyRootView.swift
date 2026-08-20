@@ -1,18 +1,39 @@
 import AppKit
 import SwiftUI
 
+private struct ChecklistRowFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
 /// The visible sticky: flat, edge-to-edge paper with a big two-line "To Do"
 /// title, a date, and an editable checklist. Hosted in a borderless window.
 struct StickyRootView: View {
     let model: StickyModel
     unowned let controller: StickyController
 
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @FocusState private var focusedID: UUID?
     @FocusState private var titleFocused: Bool
     @State private var hovering = false
     @State private var hoveringTopChrome = false
     @State private var showColors = false
     @State private var showFonts = false
+    @State private var showsDoneTasks = false
+    @State private var retainedCompletionIDs: Set<UUID> = []
+    @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var completionExitGenerations: [UUID: UUID] = [:]
+    @State private var completionTransitionSuppressionIDs: Set<UUID> = []
+    @State private var reduceMotionEnabled = false
+    @State private var rowFrames: [UUID: CGRect] = [:]
+    @State private var draggingItemID: UUID?
+    @State private var dragTranslationY: CGFloat = 0
+    @State private var dragLayoutCompensationY: CGFloat = 0
+    @State private var pressedCheckboxID: UUID?
+    @State private var suppressCheckboxToggleID: UUID?
     @State private var paywallPack: ColorPack?
     private var packStore: ColorPackStore { ColorPackStore.shared }
     /// The window's current width — the title needs it (see `header`) without a local
@@ -70,7 +91,8 @@ struct StickyRootView: View {
             }
         }
         .onAppear {
-            focusedID = model.items.first?.id
+            reduceMotionEnabled = accessibilityReduceMotion
+            focusedID = displayedItems.first?.id
             model.focusedItemID = focusedID
             model.onSplitTitle = { caret in
                 splitTitle(atUTF16Offset: caret)
@@ -81,7 +103,7 @@ struct StickyRootView: View {
                 }
             }
             model.onRequestFocus = {
-                focusedID = model.items.first(where: { !$0.isDone })?.id ?? model.items.first?.id
+                focusedID = displayedItems.first?.id
             }
             model.onRequestLastItemFocus = {
                 focusLastItemForTyping()
@@ -97,6 +119,16 @@ struct StickyRootView: View {
                     focusedID = lastID
                 }
             }
+            model.onWillSetDone = { id, isDone in
+                prepareDoneTransition(id: id, isDone: isDone)
+            }
+        }
+        .onDisappear {
+            model.onWillSetDone = nil
+            cancelCompletionExitTasks()
+        }
+        .onChange(of: accessibilityReduceMotion) { _, reduceMotion in
+            reduceMotionEnabled = reduceMotion
         }
         .onChange(of: focusedID) { _, new in model.focusedItemID = new }
         .onChange(of: titleFocused) { _, new in model.isTitleFocused = new }
@@ -139,20 +171,9 @@ struct StickyRootView: View {
             // which ate into the title's width and made longer titles wrap
             // mid-word or get cut off. Up here it costs a line of height
             // instead, and the title gets the sticky's full width.
-            HStack(spacing: 8) {
-                Text(Self.dateFormatter.string(from: model.day))
-                    .font(bodyFont(14))
-                    .foregroundStyle(color.ink.opacity(0.3))
-                Button { controller.archiveSticky() } label: {
-                    Image(systemName: "archivebox")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(color.ink.opacity(0.38))
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Archive sticky")
-            }
+            Text(Self.dateFormatter.string(from: model.day))
+                .font(bodyFont(14))
+                .foregroundStyle(color.ink.opacity(0.3))
 
             // Gives the title an explicit, fixed width budget — an
             // unconstrained TextField's ideal width just grows with its
@@ -280,11 +301,16 @@ struct StickyRootView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical) {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.orderedItems) { item in
+                    ForEach(displayedItems) { item in
                         row(item).id(item.id)
                     }
+
                     addRowButton
                 }
+            }
+            .coordinateSpace(name: "checklist")
+            .onPreferenceChange(ChecklistRowFramePreferenceKey.self) { frames in
+                rowFrames = frames
             }
             .scrollIndicators(.automatic)
             .onChange(of: focusedID) { _, id in
@@ -297,20 +323,33 @@ struct StickyRootView: View {
         .frame(maxHeight: .infinity)
     }
 
+    private var doneTaskCount: Int {
+        model.items.lazy.filter(\.isDone).count
+    }
+
+    /// Visibility is the only transformation applied here. Keeping a single
+    /// source-ordered collection prevents completed rows from regrouping or
+    /// acquiring a second SwiftUI identity when the eye toggle changes.
+    private var displayedItems: [TodoItem] {
+        model.orderedItems.filter {
+            showsDoneTasks || !$0.isDone || retainedCompletionIDs.contains($0.id)
+        }
+    }
+
     /// Always-there "next row," kept in the same scrollable checklist.
     private var addRowButton: some View {
         Button {
             let newID = model.addItem()
             focusedID = newID
         } label: {
-            HStack(spacing: 19) {
+            HStack(spacing: 14) {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(color.ink.opacity(0.32))
                     .frame(width: 13, height: 24)
                     .frame(width: 24, alignment: .leading)
                 Text("Add item")
-                    .font(bodyFont(13))
+                    .font(bodyFont(14))
                     .foregroundStyle(color.ink.opacity(0.32))
                 Spacer(minLength: 0)
             }
@@ -321,46 +360,67 @@ struct StickyRootView: View {
     }
 
     private func row(_ item: TodoItem) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 19) {
-                checkbox(item)
-                // Keep completed rows editable too. Because this stays the
-                // same TextField when isDone changes, its caret survives a
-                // keyboard toggle and Command-Return can toggle it back.
-                TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(bodyFont(14))
-                    .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
-                    .strikethrough(item.isDone, color: color.inkSecondary)
-                    .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                    .lineLimit(1...12)
-                    .focused($focusedID, equals: item.id)
-                    .onChange(of: bindingValue(item)) { _, newValue in
-                        handleDash(item, newValue)
-                    }
-                    .onKeyPress(.return, phases: .down) { press in
-                        if press.modifiers.contains(.command) {
-                            toggleDone(item)
-                        } else {
-                            submit(item)
+        ZStack {
+            VStack(spacing: 0) {
+                HStack(alignment: .center, spacing: 7) {
+                    checkbox(item)
+                    // Keep completed rows editable too. Because this stays the
+                    // same TextField when isDone changes, its caret survives a
+                    // keyboard toggle and Command-Return can toggle it back.
+                    TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(bodyFont(14))
+                        .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+                        .strikethrough(item.isDone, color: color.inkSecondary)
+                        .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                        .lineLimit(1...12)
+                        .focused($focusedID, equals: item.id)
+                        .onChange(of: bindingValue(item)) { _, newValue in
+                            handleDash(item, newValue)
                         }
-                        return .handled
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture { focusedID = item.id }
-                    .transition(.identity)
+                        .onKeyPress(.return, phases: .down) { press in
+                            if press.modifiers.contains(.command) {
+                                toggleDone(item, acknowledgesCompletion: false)
+                            } else {
+                                submit(item)
+                            }
+                            return .handled
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture { focusedID = item.id }
+                }
+                .padding(.vertical, 6)
+
+                Rectangle()
+                    .fill(color.divider)
+                    .frame(height: 1)
             }
-            .padding(.vertical, 6)
-            Rectangle()
-                .fill(color.divider)
-                .frame(height: 1)
+            .offset(y: draggingItemID == item.id ? dragTranslationY - dragLayoutCompensationY : 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ChecklistRowFramePreferenceKey.self,
+                    value: [item.id: proxy.frame(in: .named("checklist"))]
+                )
+            }
+        )
+        .zIndex(draggingItemID == item.id ? 1 : 0)
+        .transaction { transaction in
+            if draggingItemID == item.id {
+                transaction.animation = nil
+            }
+        }
+        .transition(.opacity)
     }
 
     private func checkbox(_ item: TodoItem) -> some View {
         Button {
-            toggleDone(item)
+            guard suppressCheckboxToggleID != item.id else { return }
+            toggleDone(item, acknowledgesCompletion: true)
         } label: {
             ZStack {
                 if item.isDone {
@@ -388,14 +448,198 @@ struct StickyRootView: View {
             // The remaining width stays as an easy target.
             .frame(width: 24, height: 34, alignment: .leading)
             .contentShape(Rectangle())
+            .scaleEffect(pressedCheckboxID == item.id && draggingItemID == nil ? 0.97 : 1)
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(reorderGesture(for: item, togglesOnTap: true))
+        .accessibilityLabel(
+            item.isDone
+                ? "Mark \(item.text.isEmpty ? "to-do" : item.text) not done"
+                : "Mark \(item.text.isEmpty ? "to-do" : item.text) done"
+        )
+        .accessibilityAction(named: "Move up") {
+            moveVisibleItem(item, by: -1)
+        }
+        .accessibilityAction(named: "Move down") {
+            moveVisibleItem(item, by: 1)
+        }
+        .help("Click to toggle, drag to reorder")
     }
 
-    private func toggleDone(_ item: TodoItem) {
-        withAnimation(.easeInOut(duration: 0.35)) {
-            model.toggle(item.id)
+    private func reorderGesture(for item: TodoItem, togglesOnTap: Bool) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("checklist"))
+            .onChanged { value in
+                if togglesOnTap, draggingItemID == nil {
+                    pressedCheckboxID = item.id
+                }
+
+                let threshold: CGFloat = togglesOnTap ? 7 : 2
+                guard abs(value.translation.height) >= threshold else { return }
+
+                if draggingItemID == nil {
+                    beginReordering(item, value: value)
+                }
+                guard draggingItemID == item.id else { return }
+
+                pressedCheckboxID = nil
+                dragTranslationY = value.translation.height
+                reorderIfNeeded(item, pointerY: value.location.y)
+            }
+            .onEnded { value in
+                let wasDragging = draggingItemID == item.id
+                pressedCheckboxID = nil
+
+                if wasDragging {
+                    finishReordering()
+                }
+
+                // A Button may deliver its action just after the simultaneous
+                // drag ends. Keep suppression through this event turn, then
+                // clear it whether or not the pointer was released over it.
+                if togglesOnTap {
+                    DispatchQueue.main.async {
+                        if suppressCheckboxToggleID == item.id {
+                            suppressCheckboxToggleID = nil
+                        }
+                    }
+                }
+            }
+    }
+
+    private func beginReordering(_ item: TodoItem, value: DragGesture.Value) {
+        guard rowFrames[item.id] != nil else { return }
+        focusedID = nil
+        titleFocused = false
+        draggingItemID = item.id
+        if item.id == pressedCheckboxID {
+            suppressCheckboxToggleID = item.id
         }
+        dragTranslationY = value.translation.height
+        dragLayoutCompensationY = 0
+    }
+
+    private func reorderIfNeeded(_ item: TodoItem, pointerY: CGFloat) {
+        let visible = displayedItems
+        guard let currentIndex = visible.firstIndex(where: { $0.id == item.id }),
+              let sourceFrame = rowFrames[item.id]
+        else { return }
+
+        let target: TodoItem?
+        if currentIndex + 1 < visible.count,
+           let nextFrame = rowFrames[visible[currentIndex + 1].id],
+           pointerY > nextFrame.midY {
+            target = visible[currentIndex + 1]
+        } else if currentIndex > 0,
+                  let previousFrame = rowFrames[visible[currentIndex - 1].id],
+                  pointerY < previousFrame.midY {
+            target = visible[currentIndex - 1]
+        } else {
+            target = nil
+        }
+
+        guard let target, let targetFrame = rowFrames[target.id] else { return }
+        let layoutDelta: CGFloat
+        if targetFrame.midY > sourceFrame.midY {
+            layoutDelta = targetFrame.maxY - sourceFrame.maxY
+        } else {
+            layoutDelta = targetFrame.minY - sourceFrame.minY
+        }
+        dragLayoutCompensationY += layoutDelta
+
+        let animation: Animation? = accessibilityReduceMotion
+            ? nil
+            : .interactiveSpring(response: 0.3, dampingFraction: 1, blendDuration: 0)
+        withAnimation(animation) {
+            model.moveItem(item.id, relativeTo: target.id)
+        }
+    }
+
+    private func finishReordering() {
+        let animation: Animation? = accessibilityReduceMotion
+            ? nil
+            : .interactiveSpring(response: 0.3, dampingFraction: 1, blendDuration: 0)
+        withAnimation(animation) {
+            draggingItemID = nil
+            dragTranslationY = 0
+            dragLayoutCompensationY = 0
+        }
+    }
+
+    /// VoiceOver exposes the same ordering operation without requiring a
+    /// precision drag. Keep keyboard/accessibility moves immediate; repeated
+    /// commands should never make the interface wait for an animation.
+    private func moveVisibleItem(_ item: TodoItem, by offset: Int) {
+        let visible = displayedItems
+        guard let sourceIndex = visible.firstIndex(where: { $0.id == item.id }) else { return }
+        let destinationIndex = sourceIndex + offset
+        guard visible.indices.contains(destinationIndex) else { return }
+        model.moveItem(item.id, relativeTo: visible[destinationIndex].id)
+    }
+
+    private func toggleDone(_ item: TodoItem, acknowledgesCompletion: Bool) {
+        let wasDone = item.isDone
+        if !acknowledgesCompletion {
+            completionTransitionSuppressionIDs.insert(item.id)
+        }
+        controller.toggleDone(item.id)
+        if !acknowledgesCompletion {
+            completionTransitionSuppressionIDs.remove(item.id)
+        }
+
+        guard !wasDone, !showsDoneTasks, focusedID == item.id else { return }
+        focusedID = nil
+    }
+
+    private func prepareDoneTransition(id: UUID, isDone: Bool) {
+        completionExitTasks[id]?.cancel()
+        completionExitTasks[id] = nil
+        completionExitGenerations[id] = nil
+
+        let suppressesTransition = completionTransitionSuppressionIDs.contains(id)
+            || controller.isReplayingCompletionHistory
+        guard isDone, !showsDoneTasks, !suppressesTransition else {
+            retainedCompletionIDs.remove(id)
+            return
+        }
+
+        retainedCompletionIDs.insert(id)
+        let generation = UUID()
+        completionExitGenerations[id] = generation
+        completionExitTasks[id] = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(120))
+            } catch {
+                return
+            }
+
+            guard completionExitGenerations[id] == generation else { return }
+            guard model.items.first(where: { $0.id == id })?.isDone == true else {
+                retainedCompletionIDs.remove(id)
+                completionExitTasks[id] = nil
+                completionExitGenerations[id] = nil
+                return
+            }
+
+            if reduceMotionEnabled {
+                retainedCompletionIDs.remove(id)
+            } else {
+                withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18)) {
+                    _ = retainedCompletionIDs.remove(id)
+                }
+            }
+            guard completionExitGenerations[id] == generation else { return }
+            completionExitTasks[id] = nil
+            completionExitGenerations[id] = nil
+        }
+    }
+
+    private func cancelCompletionExitTasks() {
+        for task in completionExitTasks.values {
+            task.cancel()
+        }
+        completionExitTasks.removeAll()
+        completionExitGenerations.removeAll()
+        retainedCompletionIDs.removeAll()
     }
 
     // MARK: - Color picker (free swatches + paid packs)
@@ -453,6 +697,28 @@ struct StickyRootView: View {
         VStack {
             Spacer()
             HStack(spacing: 18) {
+                Button {
+                    if showsDoneTasks,
+                       let focusedID,
+                       model.items.first(where: { $0.id == focusedID })?.isDone == true {
+                        self.focusedID = nil
+                    }
+
+                    if accessibilityReduceMotion {
+                        showsDoneTasks.toggle()
+                    } else {
+                        withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)) {
+                            showsDoneTasks.toggle()
+                        }
+                    }
+                } label: {
+                    Image(systemName: showsDoneTasks ? "eye" : "eye.slash")
+                }
+                .disabled(doneTaskCount == 0)
+                .opacity(doneTaskCount == 0 ? 0.25 : 1)
+                .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
+                .help(showsDoneTasks ? "Hide done items" : "Show \(doneTaskCount) done items")
+
                 Button { showColors.toggle() } label: { Image(systemName: "paintpalette") }
                     .popover(isPresented: $showColors, arrowEdge: .top) {
                         colorPicker
@@ -537,7 +803,7 @@ struct StickyRootView: View {
     /// visual lines within the current field. The controller restores the
     /// caret at the closest screen-space x on the destination edge.
     private func moveCaretVertically(from sourceID: UUID?, direction: Int, screenX: CGFloat) {
-        let ordered = model.orderedItems
+        let ordered = displayedItems
         if sourceID == nil {
             guard direction > 0, let first = ordered.first else { return }
             focusItem(first.id, alignedToScreenX: screenX, entering: .top)
@@ -559,7 +825,7 @@ struct StickyRootView: View {
     /// Left/Right at a field boundary continues into the adjacent text block,
     /// exactly as if the title and checklist were one continuous document.
     private func moveCaretHorizontally(from sourceID: UUID?, direction: Int) {
-        let ordered = model.orderedItems
+        let ordered = displayedItems
         if sourceID == nil {
             guard direction > 0, let first = ordered.first else { return }
             focusItem(first.id, atUTF16Offset: 0)
@@ -620,7 +886,7 @@ struct StickyRootView: View {
     private func focusLastItemForTyping() {
         let targetID: UUID
         let caret: Int
-        if let last = model.orderedItems.last {
+        if let last = displayedItems.last {
             targetID = last.id
             caret = (last.text as NSString).length
         } else {
@@ -674,10 +940,11 @@ struct StickyRootView: View {
     /// Backspace at column zero joins an item to its preceding text block.
     /// The first row joins the title; every other row joins the prior item.
     private func mergeBackward(_ item: TodoItem) {
-        guard let idx = model.items.firstIndex(where: { $0.id == item.id }) else { return }
-        let itemText = model.items[idx].text
+        let visible = displayedItems
+        guard let visibleIndex = visible.firstIndex(where: { $0.id == item.id }) else { return }
+        let itemText = bindingValue(item)
 
-        if idx == 0 {
+        if visibleIndex == 0 {
             let join = (model.title as NSString).length
             model.setTitle(model.title + itemText)
             model.delete(item.id)
@@ -685,7 +952,7 @@ struct StickyRootView: View {
             focusedID = nil
             titleFocused = true
         } else {
-            let previous = model.items[idx - 1]
+            let previous = visible[visibleIndex - 1]
             let join = (previous.text as NSString).length
             model.setText(previous.id, previous.text + itemText)
             model.delete(item.id)
@@ -720,7 +987,7 @@ struct StickyRootView: View {
     /// The first blank row should look and behave like an invitation to
     /// type, rather than an invisible one-character click target.
     private func rowPrompt(_ item: TodoItem) -> Text? {
-        guard item.id == model.orderedItems.first?.id,
+        guard item.id == displayedItems.first?.id,
               bindingValue(item).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
         return Text("Add a to-do…").foregroundStyle(color.ink.opacity(0.32))
