@@ -119,6 +119,36 @@ final class StickyManager {
     func showAll() { for c in controllers.values { c.show() } }
     func hideAll() { for c in controllers.values { c.hide() } }
 
+    var openStickyCount: Int {
+        controllers.values.reduce(into: 0) { count, controller in
+            if controller.model.isVisible { count += 1 }
+        }
+    }
+
+    /// Organises only the stickies that are currently open. Hidden stickies
+    /// keep their saved size and position. Every layout targets the display
+    /// containing the most recently active open sticky, falling back to the
+    /// newest open sticky and then the main display.
+    func arrangeOpenStickies(_ arrangement: StickyArrangement) {
+        let openControllers = order.compactMap { id -> StickyController? in
+            guard let controller = controllers[id], controller.model.isVisible else { return nil }
+            return controller
+        }
+        guard !openControllers.isEmpty,
+              let screen = arrangementScreen(for: openControllers) else { return }
+
+        let frames = StickyArrangementLayout.frames(
+            for: arrangement,
+            currentFrames: openControllers.map(\.panel.frame),
+            in: screen.visibleFrame
+        )
+        for (controller, frame) in zip(openControllers, frames) {
+            controller.arrange(to: frame, on: screen)
+        }
+        orderArrangedControllers(openControllers, for: arrangement)
+        scheduleSave()
+    }
+
     /// Hides a sticky without deleting it and remembers the close order so
     /// Shift-Command-T can restore windows just like reopening a closed tab.
     func close(_ id: UUID) {
@@ -331,6 +361,42 @@ final class StickyManager {
             y = visible.minY + gutter + rowOffset
         }
         return CGPoint(x: x, y: y)
+    }
+
+    private func arrangementScreen(for openControllers: [StickyController]) -> NSScreen? {
+        if let id = mostRecentlyActiveID,
+           let controller = controllers[id],
+           controller.model.isVisible,
+           let screen = controller.panel.screen {
+            return screen
+        }
+        return openControllers.reversed().compactMap(\.panel.screen).first
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+    }
+
+    private func orderArrangedControllers(
+        _ arrangedControllers: [StickyController],
+        for arrangement: StickyArrangement
+    ) {
+        let backToFront: [StickyController]
+        if arrangement == .vertical {
+            // `orderFront` is applied back-to-front. Sorting by the actual
+            // arranged y-position guarantees the spatially highest sticky is
+            // deepest in the z-order; every lower sticky then exposes the
+            // title strip of the one immediately above it.
+            backToFront = arrangedControllers.sorted {
+                $0.panel.frame.maxY > $1.panel.frame.maxY
+            }
+        } else if arrangement == .pile {
+            // Frames travel down and right. Put that lower-right end behind
+            // the upper-left anchor so the visible pile recedes 45° to the
+            // right; the opposite z-order makes the exposed edges read left.
+            backToFront = Array(arrangedControllers.reversed())
+        } else {
+            backToFront = arrangedControllers
+        }
+        for controller in backToFront { controller.panel.orderFront(nil) }
     }
 }
 

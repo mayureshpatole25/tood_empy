@@ -62,6 +62,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             self?.manager.newSticky()
         }
+        GlobalHotKeyManager.shared.onArrange = { [weak self] arrangement in
+            self?.manager.arrangeOpenStickies(arrangement)
+        }
         GlobalHotKeyManager.shared.reregister()
 
         if !AppSettings.shared.onboardingCompleted {

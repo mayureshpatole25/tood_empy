@@ -2,7 +2,8 @@ import Carbon.HIToolbox
 import AppKit
 
 /// Registers the two configurable global shortcuts (show active sticky, new
-/// sticky) using the Carbon Event Manager's hotkey APIs — still the standard
+/// sticky) and five fixed arrangement shortcuts using the Carbon Event
+/// Manager's hotkey APIs — still the standard
 /// way to get a system-wide shortcut in an AppKit app, works while sandboxed,
 /// and (unlike an `NSEvent` global monitor) needs no Accessibility/Input
 /// Monitoring permission, since it's registering the app's own response to a
@@ -13,14 +14,17 @@ final class GlobalHotKeyManager {
 
     var onShowSticky: (() -> Void)?
     var onNewSticky: (() -> Void)?
+    var onArrange: ((StickyArrangement) -> Void)?
 
     private var showRef: EventHotKeyRef?
     private var newRef: EventHotKeyRef?
+    private var arrangementRefs: [StickyArrangement: EventHotKeyRef] = [:]
     private var eventHandlerRef: EventHandlerRef?
 
     private static let signature: OSType = 0x546f_6479 // 'Tody'
     private let showID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 1)
     private let newID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 2)
+    private static let arrangementIDBase: UInt32 = 10
 
     private init() {
         installEventHandler()
@@ -32,6 +36,7 @@ final class GlobalHotKeyManager {
         unregisterAll()
         register(AppSettings.shared.showStickyShortcut, id: showID, into: &showRef)
         register(AppSettings.shared.newStickyShortcut, id: newID, into: &newRef)
+        registerArrangementShortcuts()
     }
 
     private func register(_ combo: KeyCombo, id: EventHotKeyID, into ref: inout EventHotKeyRef?) {
@@ -43,6 +48,38 @@ final class GlobalHotKeyManager {
         if let newRef { UnregisterEventHotKey(newRef) }
         showRef = nil
         newRef = nil
+        for ref in arrangementRefs.values { UnregisterEventHotKey(ref) }
+        arrangementRefs.removeAll()
+    }
+
+    private func registerArrangementShortcuts() {
+        let modifiers = UInt32(cmdKey | controlKey | optionKey)
+        for (index, arrangement) in StickyArrangement.allCases.enumerated() {
+            let id = EventHotKeyID(
+                signature: Self.signature,
+                id: Self.arrangementIDBase + UInt32(index)
+            )
+            var ref: EventHotKeyRef?
+            RegisterEventHotKey(
+                Self.keyCode(for: arrangement),
+                modifiers,
+                id,
+                GetApplicationEventTarget(),
+                0,
+                &ref
+            )
+            if let ref { arrangementRefs[arrangement] = ref }
+        }
+    }
+
+    private static func keyCode(for arrangement: StickyArrangement) -> UInt32 {
+        switch arrangement {
+        case .grid: return UInt32(kVK_ANSI_G)
+        case .horizontal: return UInt32(kVK_ANSI_H)
+        case .vertical: return UInt32(kVK_ANSI_J)
+        case .pile: return UInt32(kVK_ANSI_K)
+        case .scatter: return UInt32(kVK_ANSI_L)
+        }
     }
 
     private func installEventHandler() {
@@ -58,6 +95,13 @@ final class GlobalHotKeyManager {
             Task { @MainActor in
                 if id == 1 { manager.onShowSticky?() }
                 else if id == 2 { manager.onNewSticky?() }
+                else if id >= GlobalHotKeyManager.arrangementIDBase {
+                    let index = Int(id - GlobalHotKeyManager.arrangementIDBase)
+                    let arrangements = StickyArrangement.allCases
+                    if arrangements.indices.contains(index) {
+                        manager.onArrange?(arrangements[index])
+                    }
+                }
             }
             return noErr
         }, 1, &spec, selfPtr, &eventHandlerRef)

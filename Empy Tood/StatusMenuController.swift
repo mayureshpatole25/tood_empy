@@ -60,6 +60,23 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         deleteAll.isEnabled = !stickies.isEmpty
 
         menu.addItem(.separator())
+        let organiseHeader = NSMenuItem(title: "Organise Stickies", action: nil, keyEquivalent: "")
+        organiseHeader.isEnabled = false
+        menu.addItem(organiseHeader)
+        for arrangement in StickyArrangement.allCases {
+            let item = NSMenuItem(
+                title: "  \(arrangement.displayName)",
+                action: #selector(arrangeStickies(_:)),
+                keyEquivalent: arrangement.shortcutKeyEquivalent
+            )
+            item.target = self
+            item.representedObject = arrangement.rawValue
+            item.keyEquivalentModifierMask = [.command, .control, .option]
+            item.isEnabled = manager.openStickyCount > 0
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
         let colorItem = NSMenuItem(title: "Default Color", action: nil, keyEquivalent: "")
         colorItem.submenu = defaultColorMenu()
         menu.addItem(colorItem)
@@ -107,6 +124,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func newSticky() { manager.newSticky() }
     @objc private func showAll() { manager.showAll() }
     @objc private func hideAll() { manager.hideAll() }
+    @objc private func arrangeStickies(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let arrangement = StickyArrangement(rawValue: rawValue) else { return }
+        manager.arrangeOpenStickies(arrangement)
+    }
     @objc private func quit() { NSApp.terminate(nil) }
 
     @objc private func deleteAll() {
