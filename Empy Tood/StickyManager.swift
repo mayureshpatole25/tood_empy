@@ -15,6 +15,9 @@ final class StickyManager {
     /// The sticky most recently brought to front or clicked into — what the
     /// global "show active sticky" shortcut jumps to.
     private(set) var mostRecentlyActiveID: UUID?
+    /// The whole-sticky archive is observable alongside live controllers so
+    /// Home updates the moment an archive operation succeeds.
+    private(set) var archivedStickies: [ArchivedSticky] = []
 
     @ObservationIgnored private let persistence = PersistenceService()
     let archive = ArchiveService()
@@ -27,6 +30,7 @@ final class StickyManager {
     @ObservationIgnored var onOpenHome: (() -> Void)?
 
     init() {
+        refreshArchivedStickies()
         rollover = RolloverScheduler(onRollover: { [weak self] in self?.performRollover() })
     }
 
@@ -100,6 +104,7 @@ final class StickyManager {
         guard let model = controllers[id]?.model else { return }
         let entry = ArchivedSticky(id: model.id, data: model.snapshot(), archivedAt: Date())
         guard stickyArchive.append(entry) else { return }
+        refreshArchivedStickies()
         remove(id)
         // Archiving moves data between two files. Persist the removal now so
         // quitting before the normal debounce cannot resurrect a live copy.
@@ -123,7 +128,17 @@ final class StickyManager {
         controllers[model.id]?.focusForTyping()
         noteActive(model.id)
         guard saveNow() else { return }
-        stickyArchive.delete(entry.id)
+        guard stickyArchive.delete(entry.id) else { return }
+        refreshArchivedStickies()
+    }
+
+    func deleteArchived(_ id: UUID) {
+        guard stickyArchive.delete(id) else { return }
+        refreshArchivedStickies()
+    }
+
+    private func refreshArchivedStickies() {
+        archivedStickies = stickyArchive.load().sorted { $0.archivedAt > $1.archivedAt }
     }
 
     func showAll() { for c in controllers.values { c.show() } }

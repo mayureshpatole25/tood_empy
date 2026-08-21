@@ -1,10 +1,11 @@
+import AppKit
 import SwiftUI
 
 /// Shared sizing so the fan layout math and the card itself never drift
 /// apart. Narrower/taller than the first pass — closer to the real
 /// floating sticky's portrait proportions (378×490-ish) instead of the
-/// landscape-ish 200×178 it started as. Not private — ArchivedStickiesView
-/// reuses these same numbers so its grid of mini stickies matches exactly.
+/// landscape-ish 200×178 it started as. The inline archive row reuses these
+/// same numbers so archived and live stickies remain visually identical.
 enum DeskCardMetrics {
     static let width: CGFloat = 178
     static let height: CGFloat = 200
@@ -26,20 +27,53 @@ struct HomeView: View {
     let manager: StickyManager
     let journal: JournalStore
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var locationLabel: String?
-    @State private var showingArchive = false
+    private var archivedEntries: [ArchivedSticky] { manager.archivedStickies }
 
     private let desk = Color(hex: 0xFBF8F1)
+    private static let archiveSectionID = "home-archive-section"
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            // These two paint the full window, including behind the
-            // (hidden) title bar. Without ignoresSafeArea they stop short
-            // of that region and the window's own white backing shows
-            // through as a strip across the top.
+        ZStack {
+            // Keep the paper fixed while the dashboard and archive row move
+            // across it as one continuous scroll surface.
             desk.ignoresSafeArea()
             PaperDotsBackground().ignoresSafeArea()
 
+            GeometryReader { viewport in
+                ScrollViewReader { scrollProxy in
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            dashboard(scrollProxy: scrollProxy)
+                                .frame(
+                                    width: viewport.size.width,
+                                    height: max(viewport.size.height, Self.minimumSize.height)
+                                )
+                            archivedSection
+                                .frame(width: viewport.size.width)
+                                .id(Self.archiveSectionID)
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                    .scrollClipDisabled()
+                }
+            }
+        }
+        // AppKit owns the actual window minimum. Keeping SwiftUI flexible here
+        // prevents NSHostingView from adding the hidden-titlebar safe-area to
+        // that minimum (which used to turn a declared 520pt limit into 552pt).
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Home is ambient UI, so opening the app must never trigger a
+            // system permission dialog. If access was granted previously,
+            // we can still show the quiet location next to today's date.
+            LocationStamper.shared.requestLabelIfAuthorized { locationLabel = $0 }
+        }
+    }
+
+    private func dashboard(scrollProxy: ScrollViewProxy) -> some View {
+        ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: 0) {
                 announcementBanner
                 topRow
@@ -58,24 +92,10 @@ struct HomeView: View {
                 .padding(.bottom, 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
 
-            // Same floating treatment, opposite corner.
-            archiveButton
+            archiveButton(scrollProxy: scrollProxy)
                 .padding(.horizontal, 44)
                 .padding(.bottom, 44)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        }
-        // AppKit owns the actual window minimum. Keeping SwiftUI flexible here
-        // prevents NSHostingView from adding the hidden-titlebar safe-area to
-        // that minimum (which used to turn a declared 520pt limit into 552pt).
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .sheet(isPresented: $showingArchive) {
-            ArchivedStickiesView(manager: manager, onDone: { showingArchive = false })
-        }
-        .onAppear {
-            // Home is ambient UI, so opening the app must never trigger a
-            // system permission dialog. If access was granted previously,
-            // we can still show the quiet location next to today's date.
-            LocationStamper.shared.requestLabelIfAuthorized { locationLabel = $0 }
         }
     }
 
@@ -166,8 +186,17 @@ struct HomeView: View {
     /// Quiet, always-there — finished stickies you archived (instead of
     /// deleted) from the close confirmation live here. Floats in the
     /// bottom-left corner, mirroring the journal button's bottom-right spot.
-    private var archiveButton: some View {
-        Button { showingArchive = true } label: {
+    private func archiveButton(scrollProxy: ScrollViewProxy) -> some View {
+        Button {
+            let revealArchive = {
+                scrollProxy.scrollTo(Self.archiveSectionID, anchor: .bottom)
+            }
+            if reduceMotion {
+                revealArchive()
+            } else {
+                withAnimation(.easeInOut(duration: 0.36), revealArchive)
+            }
+        } label: {
             HStack(spacing: 6) {
                 Image(systemName: "archivebox")
                 Text("Archive")
@@ -176,6 +205,92 @@ struct HomeView: View {
             .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Inline archive
+
+    /// Lives immediately below the normal dashboard. Aligning its bottom to
+    /// the viewport makes Archive scroll only far enough to reveal this row,
+    /// leaving the lower part of Home visible above it for spatial context.
+    private var archivedSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Rectangle()
+                .fill(Color(hex: 0x20211E).opacity(0.1))
+                .frame(height: 1)
+
+            HStack(alignment: .firstTextBaseline) {
+                Text("Archived Stickies")
+                    .font(.system(size: 20, weight: .medium))
+                Text("\(archivedEntries.count)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Click a sticky to restore and open it")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+
+            archivedStickiesFan
+        }
+        .padding(.horizontal, 44)
+        .padding(.top, 18)
+        .padding(.bottom, 44)
+        .frame(minHeight: 330, alignment: .topLeading)
+    }
+
+    private var archivedStickiesFan: some View {
+        Group {
+            if archivedEntries.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Nothing archived yet")
+                        .font(.system(size: 15, weight: .medium))
+                    Text("Archived stickies will appear here when you need them again.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(.top, 24)
+            } else {
+                GeometryReader { proxy in
+                    ZStack(alignment: .topLeading) {
+                        let positions = fanPositions(
+                            count: archivedEntries.count,
+                            availableWidth: proxy.size.width
+                        )
+                        ForEach(Array(archivedEntries.enumerated()), id: \.element.id) { index, entry in
+                            let model = StickyModel(data: entry.data)
+                            StickyDeskCard(model: model, hoverHint: "Restore") {
+                                manager.restoreArchived(entry)
+                            }
+                            .rotationEffect(.degrees(rotation(for: index)))
+                            .offset(x: positions[index], y: verticalOffset(for: index))
+                            .zIndex(Double(index))
+                            .contextMenu {
+                                Button("Delete Permanently", role: .destructive) {
+                                    requestDeleteArchived(entry)
+                                }
+                            }
+                            .transition(.scale(scale: 0.85).combined(with: .opacity))
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: DeskCardMetrics.height + 45)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: archivedEntries.map(\.id))
+    }
+
+    private func requestDeleteArchived(_ entry: ArchivedSticky) {
+        let alert = NSAlert()
+        alert.messageText = "Delete this archived sticky for good?"
+        let title = entry.data.title.isEmpty ? "To Do" : entry.data.title
+        alert.informativeText = "\"\(title)\" will be gone for good, and can't be undone."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        manager.deleteArchived(entry.id)
     }
 
     private var greeting: String {
@@ -338,9 +453,9 @@ struct HomeView: View {
 /// One sticky on the desk — same paper color/type as the real sticky, sized
 /// up to be the clear focal point, with a hover hint that appears when
 /// hovering its corner specifically (not the whole card). Defaults to "Pop
-/// out", foreshadowing the floating window it becomes when clicked — but
-/// ArchivedStickiesView reuses this exact card for its grid of memories,
-/// where clicking opens a read-only viewer instead, hence the override.
+/// out", foreshadowing the real floating window it becomes when clicked.
+/// The inline archive row overrides that hint with "Restore" but still opens
+/// that same real window through `StickyManager.restoreArchived`.
 struct StickyDeskCard: View {
     let model: StickyModel
     var hoverHint: String = "Pop out"

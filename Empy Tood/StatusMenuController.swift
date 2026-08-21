@@ -104,7 +104,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(focusItem)
 
         menu.addItem(.separator())
-        let archiveInfo = NSMenuItem(title: "Archived Stickies: \(manager.stickyArchive.count)",
+        let archiveInfo = NSMenuItem(title: "Archived Stickies: \(manager.archivedStickies.count)",
                                      action: nil, keyEquivalent: "")
         archiveInfo.isEnabled = false
         menu.addItem(archiveInfo)
