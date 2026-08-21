@@ -9,6 +9,37 @@ private struct ChecklistRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+private enum HoverMotion {
+    static let feedback = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.14)
+}
+
+private struct HoverFeedbackModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovering = false
+
+    let scale: CGFloat
+    let darkening: Double
+    let isEnabled: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isHovering && !reduceMotion && isEnabled ? scale : 1)
+            .brightness(isHovering && isEnabled ? darkening : 0)
+            .animation(HoverMotion.feedback, value: isHovering)
+            .onHover { isHovering = $0 }
+    }
+}
+
+private extension View {
+    func hoverFeedback(
+        scale: CGFloat,
+        darkening: Double = 0,
+        isEnabled: Bool = true
+    ) -> some View {
+        modifier(HoverFeedbackModifier(scale: scale, darkening: darkening, isEnabled: isEnabled))
+    }
+}
+
 /// The visible sticky: flat, edge-to-edge paper with a big two-line "To Do"
 /// title, a date, and an editable checklist. Hosted in a borderless window.
 struct StickyRootView: View {
@@ -32,6 +63,8 @@ struct StickyRootView: View {
     @State private var dragTranslationY: CGFloat = 0
     @State private var dragLayoutCompensationY: CGFloat = 0
     @State private var pressedCheckboxID: UUID?
+    @State private var hoveredCheckboxID: UUID?
+    @State private var addRowHovered = false
     @State private var suppressCheckboxToggleID: UUID?
     @State private var paywallPack: ColorPack?
     private var packStore: ColorPackStore { ColorPackStore.shared }
@@ -322,6 +355,7 @@ struct StickyRootView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverFeedback(scale: 1.08, darkening: -0.08)
         .accessibilityLabel(label)
         .help(label)
     }
@@ -395,25 +429,29 @@ struct StickyRootView: View {
 
     /// Always-there "next row," kept in the same scrollable checklist.
     private var addRowButton: some View {
-        Button {
+        let inkOpacity = addRowHovered ? 0.46 : 0.32
+
+        return Button {
             let newID = model.addItem()
             focusItem(newID, atUTF16Offset: 0)
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(color.ink.opacity(0.32))
+                    .foregroundStyle(color.ink.opacity(inkOpacity))
                     .frame(width: 13, height: 24)
                     .frame(width: 24, alignment: .leading)
                 Text("Add item")
                     .font(bodyFont(14))
-                    .foregroundStyle(color.ink.opacity(0.32))
+                    .foregroundStyle(color.ink.opacity(inkOpacity))
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 6)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(HoverMotion.feedback, value: addRowHovered)
+        .onHover { addRowHovered = $0 }
     }
 
     private func row(_ item: TodoItem) -> some View {
@@ -474,7 +512,9 @@ struct StickyRootView: View {
     }
 
     private func checkbox(_ item: TodoItem) -> some View {
-        Button {
+        let checkboxOpacity = hoveredCheckboxID == item.id ? 0.42 : 0.3
+
+        return Button {
             guard suppressCheckboxToggleID != item.id else { return }
             toggleDone(item)
         } label: {
@@ -486,14 +526,14 @@ struct StickyRootView: View {
                     // fill's edge), which is why the border read as a
                     // different shade than the fill.
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(color.ink.opacity(0.3))
+                        .fill(color.ink.opacity(checkboxOpacity))
                         .frame(width: 13, height: 13)
                     Image(systemName: "checkmark")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(color.paper)
                 } else {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .stroke(color.ink.opacity(0.3), lineWidth: 1.1)
+                        .stroke(color.ink.opacity(checkboxOpacity), lineWidth: 1.1)
                         .frame(width: 13, height: 13)
                 }
             }
@@ -507,6 +547,8 @@ struct StickyRootView: View {
             .scaleEffect(pressedCheckboxID == item.id && draggingItemID == nil ? 0.97 : 1)
         }
         .buttonStyle(.plain)
+        .animation(HoverMotion.feedback, value: hoveredCheckboxID == item.id)
+        .onHover { hoveredCheckboxID = $0 ? item.id : nil }
         .simultaneousGesture(reorderGesture(for: item, togglesOnTap: true))
         .accessibilityLabel(
             item.isDone
@@ -790,10 +832,12 @@ struct StickyRootView: View {
                 }
                 .disabled(doneTaskCount == 0)
                 .opacity(doneTaskCount == 0 ? 0.25 : 1)
+                .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
                 .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
                 .help(showsDoneTasks ? "Hide done items" : "Show \(doneTaskCount) done items")
 
                 Button { showColors.toggle() } label: { Image(systemName: "paintpalette") }
+                    .hoverFeedback(scale: 1.1, darkening: -0.05)
                     .popover(isPresented: $showColors, arrowEdge: .top) {
                         colorPicker
                     }
@@ -801,6 +845,7 @@ struct StickyRootView: View {
                 Button { showFonts.toggle() } label: {
                     Text("Aa").font(.custom("ABCStefanTrial-Simple", size: 15))
                 }
+                    .hoverFeedback(scale: 1.1, darkening: -0.05)
                     .popover(isPresented: $showFonts, arrowEdge: .top) {
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(StickyFont.allCases) { f in
@@ -828,6 +873,7 @@ struct StickyRootView: View {
                 Button { controller.requestClose() } label: {
                     Image(systemName: "archivebox")
                 }
+                .hoverFeedback(scale: 1.1, darkening: -0.05)
                 .accessibilityLabel("Archive or delete sticky")
                 .help("Archive or delete sticky")
             }
