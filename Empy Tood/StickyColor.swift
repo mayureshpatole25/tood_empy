@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The five colors in the initial (free) pack. Color is chosen per-sticky.
+/// The built-in sticky colors. Color is chosen per-sticky.
 /// Hex values come straight from Renee's Figma file.
 enum StickyColor: String, CaseIterable, Codable, Identifiable {
     case pink       // #FE9591 — default
@@ -9,7 +9,8 @@ enum StickyColor: String, CaseIterable, Codable, Identifiable {
     case orange     // #FE6926
     case green      // #17C862
 
-    // Candy Pack (paid) — hex values from Renee.
+    // Additional palette — hex values from Renee. The raw values stay stable
+    // so existing stickies keep their saved colors.
     case candyLavender  // #ABCCF8
     case candyCoral     // #FF5E58
     case candyPink      // #FFB2D5
@@ -46,16 +47,6 @@ enum StickyColor: String, CaseIterable, Codable, Identifiable {
         case .candyPink:     return hex(0xFFB2D5)
         case .candyYellow:   return hex(0xFFE74E)
         case .candyMint:     return hex(0x94F48F)
-        }
-    }
-
-    /// Which paid pack unlocks this color — `nil` for the free built-in five.
-    var pack: ColorPack? {
-        switch self {
-        case .candyLavender, .candyCoral, .candyPink, .candyYellow, .candyMint:
-            return .candy
-        default:
-            return nil
         }
     }
 
@@ -96,8 +87,8 @@ extension StickyColor {
         }
     }
 
-    /// The rotation order for "Random" — not actually random, a fixed cycle.
-    private static let cycleOrder: [StickyColor] = [.blue, .green, .pink, .orange, .cream]
+    /// "Random" is a predictable rotation through the full built-in palette.
+    private static let cycleOrder: [StickyColor] = StickyColor.allCases
     private static let cycleIndexKey = "today.stickyColorCycleIndex"
 
     /// What a freshly-created sticky should be colored: the chosen default,

@@ -314,15 +314,11 @@ struct HomeView: View {
         return full.split(separator: " ").first.map(String.init) ?? full
     }
 
-    // MARK: - Bottom: stickies, then the focus pill centered underneath
+    // MARK: - Bottom stickies
     // (the new-list button floats independently, see `body`)
 
     private var bottomRow: some View {
-        VStack(spacing: 14) {
-            stickiesFan
-            FocusSoundControl()
-                .frame(maxWidth: .infinity, alignment: .center)
-        }
+        stickiesFan
     }
 
     /// No scroll view, no clipping, no fade — the fan just gets denser as

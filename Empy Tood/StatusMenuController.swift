@@ -163,10 +163,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         submenu.addItem(randomItem)
         submenu.addItem(.separator())
 
-        // Owned colors only — the status-bar menu isn't a place to build
-        // paywall UI; buying a pack happens from a sticky's own picker.
-        let ownedColors = StickyColor.allCases.filter { $0.pack == nil || ColorPackStore.shared.isUnlocked($0.pack!) }
-        for c in ownedColors {
+        for c in StickyColor.allCases {
             let item = NSMenuItem(title: c.displayName, action: #selector(setDefaultColor(_:)),
                                   keyEquivalent: "")
             item.target = self
