@@ -26,7 +26,6 @@ struct StickyRootView: View {
     @State private var retainedCompletionIDs: Set<UUID> = []
     @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
     @State private var completionExitGenerations: [UUID: UUID] = [:]
-    @State private var completionTransitionSuppressionIDs: Set<UUID> = []
     @State private var reduceMotionEnabled = false
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingItemID: UUID?
@@ -438,7 +437,7 @@ struct StickyRootView: View {
                         }
                         .onKeyPress(.return, phases: .down) { press in
                             if press.modifiers.contains(.command) {
-                                toggleDone(item, acknowledgesCompletion: false)
+                                toggleDone(item)
                             } else {
                                 submit(item)
                             }
@@ -477,7 +476,7 @@ struct StickyRootView: View {
     private func checkbox(_ item: TodoItem) -> some View {
         Button {
             guard suppressCheckboxToggleID != item.id else { return }
-            toggleDone(item, acknowledgesCompletion: true)
+            toggleDone(item)
         } label: {
             ZStack {
                 if item.isDone {
@@ -633,18 +632,37 @@ struct StickyRootView: View {
         model.moveItem(item.id, relativeTo: visible[destinationIndex].id)
     }
 
-    private func toggleDone(_ item: TodoItem, acknowledgesCompletion: Bool) {
+    private func toggleDone(_ item: TodoItem) {
         let wasDone = item.isDone
-        if !acknowledgesCompletion {
-            completionTransitionSuppressionIDs.insert(item.id)
-        }
         controller.toggleDone(item.id)
-        if !acknowledgesCompletion {
-            completionTransitionSuppressionIDs.remove(item.id)
-        }
 
         guard !wasDone, !showsDoneTasks, focusedID == item.id else { return }
-        focusedID = nil
+        moveFocusAfterHiding(item.id)
+    }
+
+    /// Completion keeps the editor continuous: prefer the next unfinished row,
+    /// then the previous one, and finally the title when the checklist is empty.
+    /// Update the two FocusStates in one turn instead of clearing focus first so
+    /// AppKit never spends a run-loop iteration without an insertion point.
+    private func moveFocusAfterHiding(_ completedID: UUID) {
+        let ordered = model.orderedItems
+        guard let completedIndex = ordered.firstIndex(where: { $0.id == completedID }) else { return }
+
+        let next = ordered[(completedIndex + 1)...].first(where: { !$0.isDone })
+        let previous = ordered[..<completedIndex].last(where: { !$0.isDone })
+        if let destination = next ?? previous {
+            model.isTitleFocused = false
+            model.focusedItemID = destination.id
+            controller.placeCaretOnNextItemFocus(destination.id, atUTF16Offset: 0)
+            titleFocused = false
+            focusedID = destination.id
+        } else {
+            model.focusedItemID = nil
+            model.isTitleFocused = true
+            controller.placeCaretOnNextTitleFocus(atUTF16Offset: (model.title as NSString).length)
+            focusedID = nil
+            titleFocused = true
+        }
     }
 
     private func prepareDoneTransition(id: UUID, isDone: Bool) {
@@ -652,8 +670,7 @@ struct StickyRootView: View {
         completionExitTasks[id] = nil
         completionExitGenerations[id] = nil
 
-        let suppressesTransition = completionTransitionSuppressionIDs.contains(id)
-            || controller.isReplayingCompletionHistory
+        let suppressesTransition = controller.isReplayingCompletionHistory
         guard isDone, !showsDoneTasks, !suppressesTransition else {
             retainedCompletionIDs.remove(id)
             return
@@ -680,7 +697,7 @@ struct StickyRootView: View {
             if reduceMotionEnabled {
                 retainedCompletionIDs.remove(id)
             } else {
-                withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.18)) {
+                withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.28)) {
                     _ = retainedCompletionIDs.remove(id)
                 }
             }
