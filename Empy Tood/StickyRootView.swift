@@ -522,6 +522,7 @@ struct StickyRootView: View {
         } else {
             checkboxScale = 1
         }
+        let checkboxScaleAnchor: UnitPoint = pressedCheckboxID == item.id ? .center : .leading
 
         return Button {
             guard suppressCheckboxToggleID != item.id else { return }
@@ -546,6 +547,10 @@ struct StickyRootView: View {
                         .frame(width: 13, height: 13)
                 }
             }
+            // Scale only the visual checkbox, not its hit frame. Anchoring
+            // hover growth to the leading edge keeps it inside the scroll
+            // view instead of clipping against that boundary.
+            .scaleEffect(checkboxScale, anchor: checkboxScaleAnchor)
             .padding(.leading, 1)
             // The visual checkbox shares the exact left edge used by the
             // date and title, inset by one point so the centered border
@@ -553,7 +558,6 @@ struct StickyRootView: View {
             // The remaining width stays as an easy target.
             .frame(width: 24, height: 34, alignment: .leading)
             .contentShape(Rectangle())
-            .scaleEffect(checkboxScale)
         }
         .buttonStyle(.plain)
         .animation(HoverMotion.feedback, value: isCheckboxHovered)
