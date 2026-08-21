@@ -64,11 +64,9 @@ struct OnboardingView: View {
     private var colorStep: some View {
         VStack(spacing: 20) {
             stepHeading("Pick a default color", "You can always change an individual sticky's color later.")
-            HStack(spacing: 14) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(72)), count: 6), spacing: 14) {
                 swatchButton(nil, label: "Random")
-                // Free colors only — paid packs are discovered later, from
-                // a sticky's own color picker, not during first-run setup.
-                ForEach(StickyColor.allCases.filter { $0.pack == nil }) { c in
+                ForEach(StickyColor.allCases) { c in
                     swatchButton(c, label: c.displayName)
                 }
             }
@@ -80,7 +78,7 @@ struct OnboardingView: View {
             VStack(spacing: 6) {
                 Circle()
                     .fill(c.map { AnyShapeStyle($0.paper) }
-                        ?? AnyShapeStyle(.conicGradient(colors: StickyColor.allCases.filter { $0.pack == nil }.map(\.paper), center: .center)))
+                        ?? AnyShapeStyle(.conicGradient(colors: StickyColor.allCases.map(\.paper), center: .center)))
                     .frame(width: 40, height: 40)
                     .overlay(Circle().stroke(.primary, lineWidth: color == c ? 2 : 0).padding(-3))
                 Text(label).font(.system(size: 11)).foregroundStyle(.secondary)

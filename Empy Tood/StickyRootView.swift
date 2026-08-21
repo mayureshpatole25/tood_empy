@@ -52,7 +52,6 @@ struct StickyRootView: View {
     @State private var hovering = false
     @State private var hoveringTopChrome = false
     @State private var showColors = false
-    @State private var showFonts = false
     @State private var showsDoneTasks = false
     @State private var retainedCompletionIDs: Set<UUID> = []
     @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
@@ -66,8 +65,6 @@ struct StickyRootView: View {
     @State private var hoveredCheckboxID: UUID?
     @State private var addRowHovered = false
     @State private var suppressCheckboxToggleID: UUID?
-    @State private var paywallPack: ColorPack?
-    private var packStore: ColorPackStore { ColorPackStore.shared }
     /// The window's current width — the title needs it (see `header`) without a local
     /// `GeometryReader` forcing a fixed height on it. A previous version
     /// used a `titleWraps` heuristic (does the whole title fit on one line?)
@@ -119,9 +116,6 @@ struct StickyRootView: View {
             }
         )
         .contextMenu { contextMenu }
-        .sheet(item: $paywallPack) { pack in
-            ColorPackPaywallView(pack: pack) { }
-        }
         .onContinuousHover { phase in
             switch phase {
             case .active(let location):
@@ -160,6 +154,9 @@ struct StickyRootView: View {
             model.onRequestLastItemFocus = {
                 focusLastItemForTyping()
             }
+            model.onToggleDoneVisibility = {
+                toggleDoneTaskVisibility()
+            }
             model.onMoveCaretToDocumentBoundary = { direction in
                 if direction < 0 {
                     focusTitle(atUTF16Offset: 0)
@@ -187,6 +184,7 @@ struct StickyRootView: View {
         }
         .onDisappear {
             model.onWillSetDone = nil
+            model.onToggleDoneVisibility = nil
             cancelCompletionExitTasks()
         }
         .onChange(of: accessibilityReduceMotion) { _, reduceMotion in
@@ -771,33 +769,12 @@ struct StickyRootView: View {
         retainedCompletionIDs.removeAll()
     }
 
-    // MARK: - Color picker (free swatches + paid packs)
+    // MARK: - Color picker
 
     private var colorPicker: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                ForEach(StickyColor.allCases.filter { $0.pack == nil }) { c in
-                    colorSwatchButton(c)
-                }
-            }
-            ForEach(ColorPack.allCases) { pack in
-                HStack(spacing: 10) {
-                    if packStore.isUnlocked(pack) {
-                        ForEach(pack.colors) { c in colorSwatchButton(c) }
-                    } else {
-                        Button { paywallPack = pack } label: {
-                            HStack(spacing: 6) {
-                                ForEach(pack.colors) { c in
-                                    Circle().fill(c.paper).frame(width: 14, height: 14)
-                                }
-                                Image(systemName: "lock.fill")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(22)), count: 5), spacing: 10) {
+            ForEach(StickyColor.allCases) { c in
+                colorSwatchButton(c)
             }
         }
         .padding(12)
@@ -822,65 +799,41 @@ struct StickyRootView: View {
 
     // MARK: - Bottom hover toolbar
 
+    private func toggleDoneTaskVisibility() {
+        guard doneTaskCount > 0 else { return }
+
+        if showsDoneTasks,
+           let focusedID,
+           model.items.first(where: { $0.id == focusedID })?.isDone == true {
+            self.focusedID = nil
+        }
+
+        if accessibilityReduceMotion {
+            showsDoneTasks.toggle()
+        } else {
+            withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)) {
+                showsDoneTasks.toggle()
+            }
+        }
+    }
+
     private var bottomToolbar: some View {
         VStack {
             Spacer()
             HStack(spacing: 18) {
-                Button {
-                    if showsDoneTasks,
-                       let focusedID,
-                       model.items.first(where: { $0.id == focusedID })?.isDone == true {
-                        self.focusedID = nil
-                    }
-
-                    if accessibilityReduceMotion {
-                        showsDoneTasks.toggle()
-                    } else {
-                        withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)) {
-                            showsDoneTasks.toggle()
-                        }
-                    }
-                } label: {
+                Button { toggleDoneTaskVisibility() } label: {
                     Image(systemName: showsDoneTasks ? "eye" : "eye.slash")
                 }
                 .disabled(doneTaskCount == 0)
                 .opacity(doneTaskCount == 0 ? 0.25 : 1)
                 .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
                 .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
-                .help(showsDoneTasks ? "Hide done items" : "Show \(doneTaskCount) done items")
+                .help(showsDoneTasks ? "Hide done items (⌘S)" : "Show \(doneTaskCount) done items (⌘S)")
 
                 Button { showColors.toggle() } label: { Image(systemName: "paintpalette") }
                     .hoverFeedback(scale: 1.1, darkening: -0.05)
                     .popover(isPresented: $showColors, arrowEdge: .top) {
                         colorPicker
-                    }
-
-                Button { showFonts.toggle() } label: {
-                    Text("Aa").font(.custom("ABCStefanTrial-Simple", size: 15))
-                }
-                    .hoverFeedback(scale: 1.1, darkening: -0.05)
-                    .popover(isPresented: $showFonts, arrowEdge: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            ForEach(StickyFont.allCases) { f in
-                                Button {
-                                    model.setFont(f)
-                                    showFonts = false
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Text(f.displayName)
-                                        if f == model.font {
-                                            Spacer(minLength: 12)
-                                            Image(systemName: "checkmark")
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 8)
-                            }
-                        }
-                        .padding(8)
                     }
 
                 Button { controller.requestClose() } label: {
@@ -909,15 +862,8 @@ struct StickyRootView: View {
 
     @ViewBuilder private var contextMenu: some View {
         Menu("Color") {
-            // Owned colors only — locked pack colors need the paywall UI in
-            // the popover picker, not a bare menu item.
-            ForEach(StickyColor.allCases.filter { $0.pack == nil || packStore.isUnlocked($0.pack!) }) { c in
+            ForEach(StickyColor.allCases) { c in
                 Button(c.displayName) { model.setColor(c) }
-            }
-        }
-        Menu("Font") {
-            ForEach(StickyFont.allCases) { f in
-                Button(f.displayName) { model.setFont(f) }
             }
         }
         Divider()

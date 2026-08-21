@@ -62,6 +62,9 @@ final class StickyModel: Identifiable {
     /// from the AppKit-level controller, so this is the same bridge pattern.
     @ObservationIgnored var onRequestFocus: (() -> Void)?
     @ObservationIgnored var onRequestLastItemFocus: (() -> Void)?
+    /// Toggles whether completed rows are visible in this sticky. Bridged to
+    /// the view so the AppKit key monitor can handle Command-S reliably.
+    @ObservationIgnored var onToggleDoneVisibility: (() -> Void)?
     /// Moves the caret to the start of the title (-1) or the end of the
     /// final visible checklist item (+1) for Command-Up/Command-Down.
     @ObservationIgnored var onMoveCaretToDocumentBoundary: ((Int) -> Void)?

@@ -150,6 +150,10 @@ final class StickyController: NSObject, NSWindowDelegate {
                 self.manager?.newSticky()
                 return nil
             }
+            if pressedKey == "s", commandModifiers == .command {
+                self.model.onToggleDoneVisibility?()
+                return nil
+            }
             if pressedKey == "d", commandModifiers == .command {
                 self.requestClose() // asks Archive/Delete/Cancel, same as the archive button
                 return nil
