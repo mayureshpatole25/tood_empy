@@ -218,6 +218,16 @@ final class StickyModel: Identifiable {
         onChange?()
     }
 
+    /// Applies the reveal-time grouping once, preserving the relative order
+    /// within the unfinished and completed groups. After this returns, normal
+    /// edits and drags are free to change the order until the next reveal.
+    func groupDoneItemsAtBottom() {
+        let grouped = items.filter { !$0.isDone } + items.filter(\.isDone)
+        guard grouped != items else { return }
+        items = grouped
+        onChange?()
+    }
+
     /// Moves one row through the source-of-truth array. Reordering relative
     /// to an item (rather than a visible index) keeps the operation correct
     /// when completed rows are currently hidden from the checklist.

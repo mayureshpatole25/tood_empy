@@ -416,12 +416,13 @@ struct StickyRootView: View {
         model.items.lazy.filter(\.isDone).count
     }
 
-    /// Visibility is the only transformation applied here. Keeping a single
-    /// source-ordered collection prevents completed rows from regrouping or
-    /// acquiring a second SwiftUI identity when the eye toggle changes.
+    /// Visibility is the only transformation applied here. The hidden-to-shown
+    /// transition performs its one-time grouping in `toggleDoneTaskVisibility`;
+    /// while shown, completion and drag operations retain the resulting order.
     private var displayedItems: [TodoItem] {
         model.orderedItems.filter {
-            showsDoneTasks || !$0.isDone || retainedCompletionIDs.contains($0.id)
+            showsDoneTasks ||
+            !$0.isDone || retainedCompletionIDs.contains($0.id)
         }
     }
 
@@ -801,6 +802,10 @@ struct StickyRootView: View {
 
     private func toggleDoneTaskVisibility() {
         guard doneTaskCount > 0 else { return }
+
+        if !showsDoneTasks {
+            model.groupDoneItemsAtBottom()
+        }
 
         if showsDoneTasks,
            let focusedID,
