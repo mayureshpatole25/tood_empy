@@ -98,22 +98,32 @@ final class StickyManager {
     /// decides archive vs. delete; this just also keeps a copy.
     func archive(_ id: UUID) {
         guard let model = controllers[id]?.model else { return }
-        stickyArchive.append(ArchivedSticky(id: model.id, data: model.snapshot(), archivedAt: Date()))
+        let entry = ArchivedSticky(id: model.id, data: model.snapshot(), archivedAt: Date())
+        guard stickyArchive.append(entry) else { return }
         remove(id)
+        // Archiving moves data between two files. Persist the removal now so
+        // quitting before the normal debounce cannot resurrect a live copy.
+        saveNow()
     }
 
-    /// Returns a whole archived sticky to the desktop and removes the
-    /// archived copy only after the live controller has been recreated.
+    /// Returns a whole archived sticky to the desktop. The live store is
+    /// written before the archive entry is removed, so an interrupted restore
+    /// can leave a harmless duplicate but can never lose the sticky.
     func restoreArchived(_ entry: ArchivedSticky) {
-        guard controllers[entry.id] == nil else { return }
         var data = entry.data
+        // Older interrupted archive operations may have left this identifier
+        // in both stores. Restore it as a distinct sticky instead of making
+        // the button silently do nothing.
+        if controllers[data.id] != nil {
+            data.id = UUID()
+        }
         data.isVisible = true
         let model = StickyModel(data: data)
         addController(for: model)
-        stickyArchive.delete(entry.id)
         controllers[model.id]?.focusForTyping()
         noteActive(model.id)
-        saveNow()
+        guard saveNow() else { return }
+        stickyArchive.delete(entry.id)
     }
 
     func showAll() { for c in controllers.values { c.show() } }
@@ -309,9 +319,12 @@ final class StickyManager {
         saveTimer = t
     }
 
-    func saveNow() {
+    @discardableResult
+    func saveNow() -> Bool {
+        saveTimer?.invalidate()
+        saveTimer = nil
         let snapshots = order.compactMap { controllers[$0]?.model.snapshot() }
-        persistence.save(snapshots)
+        return persistence.save(snapshots)
     }
 
     // MARK: - Rollover

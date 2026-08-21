@@ -34,26 +34,36 @@ struct StickyArchiveService {
         return (try? decoder.decode([ArchivedSticky].self, from: data)) ?? []
     }
 
-    private func save(_ all: [ArchivedSticky]) {
+    @discardableResult
+    private func save(_ all: [ArchivedSticky]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted]
-        guard let data = try? encoder.encode(all) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        guard let data = try? encoder.encode(all) else { return false }
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 
-    func append(_ sticky: ArchivedSticky) {
+    /// Returns false without changing the live sticky when the archive cannot
+    /// be persisted.
+    @discardableResult
+    func append(_ sticky: ArchivedSticky) -> Bool {
         var all = load()
         all.append(sticky)
-        save(all)
+        return save(all)
     }
 
     /// Removes an archived sticky for good — the archive view's own
     /// "Delete" action, for actually cleaning up old memories.
-    func delete(_ id: UUID) {
+    @discardableResult
+    func delete(_ id: UUID) -> Bool {
         var all = load()
         all.removeAll { $0.id == id }
-        save(all)
+        return save(all)
     }
 
     var count: Int { load().count }

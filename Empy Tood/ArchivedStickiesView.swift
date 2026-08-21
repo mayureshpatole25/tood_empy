@@ -5,8 +5,8 @@ import SwiftUI
 /// deleted from the close confirmation, kept as a memory rather than living
 /// on your desktop. Shown as the exact same mini-sticky cards as the Home
 /// dashboard's fan (StickyDeskCard, reused as-is), so a memory looks like
-/// what it was. Tapping one opens a full-size, read-only view; hovering
-/// reveals a trash icon to permanently delete it, for actually cleaning up.
+/// what it was. Tapping one opens a full-size, read-only view; each card also
+/// offers direct Restore and Delete actions.
 struct ArchivedStickiesView: View {
     let manager: StickyManager
     var onDone: () -> Void
@@ -28,7 +28,7 @@ struct ArchivedStickiesView: View {
     /// blank sheet.
     private var rows: Int { max(1, Int(ceil(Double(entries.count) / Double(columnCount)))) }
     private var gridContentHeight: CGFloat {
-        let rowHeight: CGFloat = DeskCardMetrics.height + 26 + 28 // card + date label + row spacing
+        let rowHeight: CGFloat = DeskCardMetrics.height + 28 + 28 // card + action row + row spacing
         return min(CGFloat(rows) * rowHeight + 20, 480) // caps out and scrolls past ~2 rows
     }
     private var sheetHeight: CGFloat { 68 + (entries.isEmpty ? 220 : gridContentHeight) }
@@ -105,28 +105,33 @@ struct ArchivedStickiesView: View {
         let model = StickyModel(data: entry.data)
         return VStack(spacing: 6) {
             StickyDeskCard(model: model, hoverHint: "View") { viewing = entry }
-            Text(Self.dateFormatter.string(from: entry.archivedAt))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-        }
-        .overlay(alignment: .topLeading) {
-            Button { requestDelete(entry) } label: {
-                Image(systemName: "trash")
+            HStack(spacing: 8) {
+                Text(Self.dateFormatter.string(from: entry.archivedAt))
                     .font(.system(size: 11))
-                    .foregroundStyle(.white)
-                    .frame(width: 22, height: 22)
-                    .background(.black.opacity(0.55), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .padding(6)
-            .opacity(cardHover[entry.id] == true ? 1 : 0)
-        }
-        .onHover { cardHover[entry.id] = $0 }
-    }
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Button {
+                    manager.restoreArchived(entry)
+                    if viewing?.id == entry.id { viewing = nil }
+                    reload()
+                } label: {
+                    Label("Restore", systemImage: "arrow.uturn.backward")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
 
-    // Keyed on id rather than a single shared @State so each card's trash
-    // icon only reveals on its own hover, not whichever was hovered last.
-    @State private var cardHover: [UUID: Bool] = [:]
+                Button { requestDelete(entry) } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Delete permanently")
+            }
+            .frame(width: DeskCardMetrics.width)
+        }
+    }
 
     private func requestDelete(_ entry: ArchivedSticky) {
         let alert = NSAlert()
