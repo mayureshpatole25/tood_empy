@@ -107,13 +107,23 @@ struct StickyRootView: View {
             model.onSplitTitle = { caret in
                 splitTitle(atUTF16Offset: caret)
             }
+            model.onSplitItem = { id, caret in
+                if let newID = model.splitItem(id, atUTF16Offset: caret) {
+                    focusItem(newID, atUTF16Offset: 0)
+                }
+            }
             model.onMergeItemBackward = { id in
                 if let item = model.items.first(where: { $0.id == id }) {
                     mergeBackward(item)
                 }
             }
+            model.onMergeItemForward = { id in
+                mergeForward(id)
+            }
             model.onRequestFocus = {
-                focusedID = displayedItems.first?.id
+                if let first = displayedItems.first {
+                    focusItem(first.id, atUTF16Offset: (first.text as NSString).length)
+                }
             }
             model.onRequestLastItemFocus = {
                 focusLastItemForTyping()
@@ -133,7 +143,9 @@ struct StickyRootView: View {
             }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
-                    focusedID = lastID
+                    let offset = model.items.first(where: { $0.id == lastID })
+                        .map { ($0.text as NSString).length } ?? 0
+                    focusItem(lastID, atUTF16Offset: offset)
                 }
             }
             model.onWillSetDone = { id, isDone in
@@ -386,7 +398,7 @@ struct StickyRootView: View {
     private var addRowButton: some View {
         Button {
             let newID = model.addItem()
-            focusedID = newID
+            focusItem(newID, atUTF16Offset: 0)
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: "plus")
@@ -434,7 +446,6 @@ struct StickyRootView: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                         .contentShape(Rectangle())
-                        .onTapGesture { focusedID = item.id }
                 }
                 .padding(.vertical, 6)
 
@@ -843,7 +854,7 @@ struct StickyRootView: View {
     private func submit(_ item: TodoItem) {
         guard !isBlank(bindingValue(item)) else { return }
         let newID = model.addItem(after: item)
-        focusedID = newID
+        focusItem(newID, atUTF16Offset: 0)
     }
 
     /// Crosses title/item boundaries after AppKit has exhausted the wrapped
@@ -896,7 +907,9 @@ struct StickyRootView: View {
         focusedID = nil
         titleFocused = false
         DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(atUTF16Offset: offset)
+            model.focusedItemID = nil
+            model.isTitleFocused = true
+            controller.placeCaretOnNextTitleFocus(atUTF16Offset: offset)
             titleFocused = true
         }
     }
@@ -905,7 +918,9 @@ struct StickyRootView: View {
         focusedID = nil
         titleFocused = false
         DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(alignedToScreenX: screenX, entering: edge)
+            model.focusedItemID = nil
+            model.isTitleFocused = true
+            controller.placeCaretOnNextTitleFocus(alignedToScreenX: screenX, entering: edge)
             titleFocused = true
         }
     }
@@ -914,7 +929,9 @@ struct StickyRootView: View {
         titleFocused = false
         focusedID = nil
         DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(atUTF16Offset: offset)
+            model.isTitleFocused = false
+            model.focusedItemID = id
+            controller.placeCaretOnNextItemFocus(id, atUTF16Offset: offset)
             focusedID = id
         }
     }
@@ -923,7 +940,9 @@ struct StickyRootView: View {
         titleFocused = false
         focusedID = nil
         DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(alignedToScreenX: screenX, entering: edge)
+            model.isTitleFocused = false
+            model.focusedItemID = id
+            controller.placeCaretOnNextItemFocus(id, alignedToScreenX: screenX, entering: edge)
             focusedID = id
         }
     }
@@ -941,12 +960,7 @@ struct StickyRootView: View {
             caret = 0
         }
 
-        titleFocused = false
-        focusedID = nil
-        DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(atUTF16Offset: caret)
-            focusedID = targetID
-        }
+        focusItem(targetID, atUTF16Offset: caret)
     }
 
     /// Return in the title creates the first checklist line. If the sticky's
@@ -976,12 +990,7 @@ struct StickyRootView: View {
         // it first and restore it on the next run-loop turn. Arm the caret
         // immediately before that restoration so an outgoing title
         // selection notification cannot consume it.
-        titleFocused = false
-        focusedID = nil
-        DispatchQueue.main.async {
-            controller.placeCaretOnNextFocus(atUTF16Offset: 0)
-            focusedID = targetID
-        }
+        focusItem(targetID, atUTF16Offset: 0)
     }
 
     /// Backspace at column zero joins an item to its preceding text block.
@@ -995,24 +1004,33 @@ struct StickyRootView: View {
             let join = (model.title as NSString).length
             model.setTitle(model.title + itemText)
             model.delete(item.id)
-            controller.placeCaretOnNextFocus(atUTF16Offset: join)
-            focusedID = nil
-            titleFocused = true
+            focusTitle(atUTF16Offset: join)
         } else {
             let previous = visible[visibleIndex - 1]
             let join = (previous.text as NSString).length
             model.setText(previous.id, previous.text + itemText)
             model.delete(item.id)
-            controller.placeCaretOnNextFocus(atUTF16Offset: join)
-            focusedID = previous.id
+            focusItem(previous.id, atUTF16Offset: join)
         }
+    }
+
+    /// Forward Delete at the end of a row joins the next visible row into it.
+    /// The current row keeps its identity and the caret stays at the join.
+    private func mergeForward(_ id: UUID) {
+        let visible = displayedItems
+        guard let index = visible.firstIndex(where: { $0.id == id }),
+              index + 1 < visible.count,
+              let join = model.mergeItemForward(id, with: visible[index + 1].id)
+        else { return }
+
+        controller.restoreCaretInCurrentEditor(atUTF16Offset: join)
     }
 
     private func handleDash(_ item: TodoItem, _ value: String) {
         if value == "-" {
             model.setText(item.id, "")
             let newID = model.addItem(after: item)
-            focusedID = newID
+            focusItem(newID, atUTF16Offset: 0)
         }
     }
 

@@ -52,7 +52,9 @@ final class StickyModel: Identifiable {
     /// crosses TextField boundaries. SwiftUI's TextField consumes Return and
     /// Delete before `onKeyPress` can reliably inspect the AppKit caret.
     @ObservationIgnored var onSplitTitle: ((Int) -> Void)?
+    @ObservationIgnored var onSplitItem: ((UUID, Int) -> Void)?
     @ObservationIgnored var onMergeItemBackward: ((UUID) -> Void)?
+    @ObservationIgnored var onMergeItemForward: ((UUID) -> Void)?
 
     /// Set by the view; invoked by `StickyController.focusForTyping()` (the
     /// global "show active sticky" shortcut) to move keyboard focus onto the
@@ -122,6 +124,46 @@ final class StickyModel: Identifiable {
         }
         onChange?()
         return new.id
+    }
+
+    /// Splits a checklist row at an AppKit UTF-16 caret offset. At column
+    /// zero, preserve the existing item intact and insert the blank row before
+    /// it; elsewhere the prefix stays in the existing item and the suffix
+    /// becomes the following item. Returns the new row to focus.
+    @discardableResult
+    func splitItem(_ id: UUID, atUTF16Offset offset: Int) -> UUID? {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return nil }
+        let text = items[idx].text as NSString
+        let split = min(max(offset, 0), text.length)
+        let new: TodoItem
+
+        if split == 0 {
+            new = TodoItem()
+            items.insert(new, at: idx)
+        } else {
+            items[idx].text = text.substring(to: split)
+            new = TodoItem(text: text.substring(from: split))
+            items.insert(new, at: idx + 1)
+        }
+
+        onChange?()
+        return new.id
+    }
+
+    /// Joins the following visible row into `id`, preserving the current row
+    /// and returning the UTF-16 offset where the caret should remain.
+    @discardableResult
+    func mergeItemForward(_ id: UUID, with nextID: UUID) -> Int? {
+        guard id != nextID,
+              let idx = items.firstIndex(where: { $0.id == id }),
+              let nextIndex = items.firstIndex(where: { $0.id == nextID })
+        else { return nil }
+
+        let join = (items[idx].text as NSString).length
+        items[idx].text += items[nextIndex].text
+        items.remove(at: nextIndex)
+        onChange?()
+        return join
     }
 
     func setText(_ id: UUID, _ text: String) {

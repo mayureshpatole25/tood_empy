@@ -22,7 +22,24 @@ final class StickyController: NSObject, NSWindowDelegate {
         case horizontal(screenX: CGFloat, edge: StickyCaretEdge)
     }
 
+    private enum PendingCaretTarget: Equatable {
+        case title
+        case item(UUID)
+
+        @MainActor
+        func matches(_ model: StickyModel) -> Bool {
+            switch self {
+            case .title:
+                return model.isTitleFocused
+            case .item(let id):
+                return model.focusedItemID == id
+            }
+        }
+    }
+
     private var pendingCaretPlacement: PendingCaretPlacement?
+    private var pendingCaretTarget: PendingCaretTarget?
+    private var pendingCaretGeneration: UUID?
     private var hosting: NSHostingView<StickyRootView>!
     private var frameBeforeExpansion: NSRect?
     private var isRepairingFrame = false
@@ -178,10 +195,29 @@ final class StickyController: NSObject, NSWindowDelegate {
                     return nil
                 }
 
+                // Treat checklist rows as blocks in one continuous editor.
+                // Return splits at the caret; at column zero the existing
+                // item moves down intact, while a middle split moves only the
+                // suffix into the new row.
+                if (event.keyCode == 36 || event.keyCode == 76),
+                   let id = self.model.focusedItemID,
+                   !editor.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.model.onSplitItem?(id, caret)
+                    return nil
+                }
+
                 // At the start of a row, Backspace joins it to the preceding
                 // row (or to the title when this is the first item).
                 if event.keyCode == 51, let id = self.model.focusedItemID, caret == 0 {
                     self.model.onMergeItemBackward?(id)
+                    return nil
+                }
+
+                // Fn-Delete is AppKit's forward-delete key. At the end of a
+                // row it removes the boundary to the next row while leaving
+                // the caret at that exact join point.
+                if event.keyCode == 117, let id = self.model.focusedItemID, caret == length {
+                    self.model.onMergeItemForward?(id)
                     return nil
                 }
 
@@ -255,8 +291,13 @@ final class StickyController: NSObject, NSWindowDelegate {
 
                 self.applySelectionStyle(to: editor)
 
-                guard let placement = self.pendingCaretPlacement else { return }
+                guard let placement = self.pendingCaretPlacement,
+                      let target = self.pendingCaretTarget,
+                      target.matches(self.model)
+                else { return }
                 self.pendingCaretPlacement = nil
+                self.pendingCaretTarget = nil
+                self.pendingCaretGeneration = nil
                 let caret = self.caretRange(for: placement, in: editor)
                 if editor.selectedRange() != caret { editor.setSelectedRange(caret) }
             }
@@ -272,14 +313,56 @@ final class StickyController: NSObject, NSWindowDelegate {
     /// Call right before programmatically moving focus between fields. AppKit
     /// selects the destination text automatically; this replaces that with a
     /// caret at the semantic join/split point before it is drawn.
-    func placeCaretOnNextFocus(atUTF16Offset offset: Int) {
-        pendingCaretPlacement = .offset(offset)
+    func placeCaretOnNextTitleFocus(atUTF16Offset offset: Int) {
+        prepareCaretPlacement(.offset(offset), for: .title)
+    }
+
+    func placeCaretOnNextItemFocus(_ id: UUID, atUTF16Offset offset: Int) {
+        prepareCaretPlacement(.offset(offset), for: .item(id))
+    }
+
+    /// Restores a caret after changing the text of the editor that already
+    /// owns first responder, where no focus transition will occur to consume
+    /// `pendingCaretPlacement`.
+    func restoreCaretInCurrentEditor(atUTF16Offset offset: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let editor = self.panel.firstResponder as? NSTextView else { return }
+            let length = (editor.string as NSString).length
+            editor.setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
+        }
     }
 
     /// Places the caret on the first/last visual line of the next field at
     /// the x-position closest to where it was in the field being left.
-    func placeCaretOnNextFocus(alignedToScreenX screenX: CGFloat, entering edge: StickyCaretEdge) {
-        pendingCaretPlacement = .horizontal(screenX: screenX, edge: edge)
+    func placeCaretOnNextTitleFocus(alignedToScreenX screenX: CGFloat, entering edge: StickyCaretEdge) {
+        prepareCaretPlacement(.horizontal(screenX: screenX, edge: edge), for: .title)
+    }
+
+    func placeCaretOnNextItemFocus(
+        _ id: UUID,
+        alignedToScreenX screenX: CGFloat,
+        entering edge: StickyCaretEdge
+    ) {
+        prepareCaretPlacement(.horizontal(screenX: screenX, edge: edge), for: .item(id))
+    }
+
+    /// A placement belongs only to the next focus transition for its exact
+    /// destination. Expiring an unused token prevents a later intentional
+    /// click or keyboard selection from being collapsed unexpectedly.
+    private func prepareCaretPlacement(_ placement: PendingCaretPlacement, for target: PendingCaretTarget) {
+        let generation = UUID()
+        pendingCaretPlacement = placement
+        pendingCaretTarget = target
+        pendingCaretGeneration = generation
+
+        DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.pendingCaretGeneration == generation else { return }
+                self.pendingCaretPlacement = nil
+                self.pendingCaretTarget = nil
+                self.pendingCaretGeneration = nil
+            }
+        }
     }
 
     private func caretRange(for placement: PendingCaretPlacement, in editor: NSTextView) -> NSRange {
