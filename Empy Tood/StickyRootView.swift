@@ -355,7 +355,7 @@ struct StickyRootView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .hoverFeedback(scale: 1.08, darkening: -0.08)
+        .hoverFeedback(scale: 1, darkening: -0.08)
         .accessibilityLabel(label)
         .help(label)
     }
@@ -512,7 +512,16 @@ struct StickyRootView: View {
     }
 
     private func checkbox(_ item: TodoItem) -> some View {
-        let checkboxOpacity = hoveredCheckboxID == item.id ? 0.42 : 0.3
+        let isCheckboxHovered = hoveredCheckboxID == item.id
+        let checkboxOpacity = isCheckboxHovered ? 0.42 : 0.3
+        let checkboxScale: CGFloat
+        if pressedCheckboxID == item.id && draggingItemID == nil {
+            checkboxScale = 0.97
+        } else if isCheckboxHovered && draggingItemID == nil && !accessibilityReduceMotion {
+            checkboxScale = 1.1
+        } else {
+            checkboxScale = 1
+        }
 
         return Button {
             guard suppressCheckboxToggleID != item.id else { return }
@@ -544,10 +553,10 @@ struct StickyRootView: View {
             // The remaining width stays as an easy target.
             .frame(width: 24, height: 34, alignment: .leading)
             .contentShape(Rectangle())
-            .scaleEffect(pressedCheckboxID == item.id && draggingItemID == nil ? 0.97 : 1)
+            .scaleEffect(checkboxScale)
         }
         .buttonStyle(.plain)
-        .animation(HoverMotion.feedback, value: hoveredCheckboxID == item.id)
+        .animation(HoverMotion.feedback, value: isCheckboxHovered)
         .onHover { hoveredCheckboxID = $0 ? item.id : nil }
         .simultaneousGesture(reorderGesture(for: item, togglesOnTap: true))
         .accessibilityLabel(
