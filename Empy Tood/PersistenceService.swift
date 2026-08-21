@@ -26,11 +26,19 @@ struct PersistenceService {
         return (try? decoder.decode([StickyData].self, from: data)) ?? []
     }
 
-    func save(_ stickies: [StickyData]) {
+    /// Returns whether the complete collection reached disk. Callers that move
+    /// data between stores use this to avoid deleting the only durable copy.
+    @discardableResult
+    func save(_ stickies: [StickyData]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted]
-        guard let data = try? encoder.encode(stickies) else { return }
-        try? data.write(to: fileURL, options: .atomic)
+        guard let data = try? encoder.encode(stickies) else { return false }
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            return true
+        } catch {
+            return false
+        }
     }
 }
