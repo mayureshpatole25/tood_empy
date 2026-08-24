@@ -22,6 +22,18 @@ final class AppSettings {
         }
     }
 
+    /// Controls the completion checkmark, strikethrough, and particle burst.
+    /// Other interface motion continues to follow the system Reduce Motion
+    /// preference independently.
+    var completionAnimationsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                completionAnimationsEnabled,
+                forKey: Keys.completionAnimationsEnabled
+            )
+        }
+    }
+
     var showStickyShortcut: KeyCombo {
         didSet { UserDefaults.standard.set(showStickyShortcut.rawValue, forKey: Keys.showShortcut) }
     }
@@ -30,14 +42,12 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(newStickyShortcut.rawValue, forKey: Keys.newShortcut) }
     }
 
-    /// The journal's one user-set prompt — deliberately not a daily-rotating
-    /// one. Shown quietly above the write area; editable any time.
+    /// Retained only so existing on-disk journal data remains compatible if
+    /// this legacy model is decoded. Journal is no longer exposed in the UI.
     var journalPrompt: String {
         didSet { UserDefaults.standard.set(journalPrompt, forKey: Keys.journalPrompt) }
     }
 
-    /// Whether saving today's first journal entry also asks Location
-    /// Services for a rough "neighborhood, city" stamp.
     var journalLocationEnabled: Bool {
         didSet { UserDefaults.standard.set(journalLocationEnabled, forKey: Keys.journalLocation) }
     }
@@ -67,6 +77,7 @@ final class AppSettings {
         let d = UserDefaults.standard
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
         launchAtLogin = d.bool(forKey: Keys.launchAtLogin)
+        completionAnimationsEnabled = d.object(forKey: Keys.completionAnimationsEnabled) as? Bool ?? true
         showStickyShortcut = d.string(forKey: Keys.showShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultShowSticky
         newStickyShortcut = d.string(forKey: Keys.newShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultNewSticky
         journalPrompt = d.string(forKey: Keys.journalPrompt) ?? "What's actually on your mind today?"
@@ -79,6 +90,7 @@ final class AppSettings {
     private enum Keys {
         static let onboardingCompleted = "today.onboardingCompleted"
         static let launchAtLogin = "today.launchAtLogin"
+        static let completionAnimationsEnabled = "today.completionAnimationsEnabled"
         static let showShortcut = "today.showStickyShortcut"
         static let newShortcut = "today.newStickyShortcut"
         static let journalPrompt = "today.journalPrompt"
