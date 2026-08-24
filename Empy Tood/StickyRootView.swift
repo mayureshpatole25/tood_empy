@@ -164,30 +164,48 @@ private struct CompletionParticleBurst: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     let isChecked: Bool
-    let tint: Color
+    let paperColor: Color
+    let inkColor: Color
 
     @State private var burst: Burst?
-
-    private struct Burst {
-        let id = UUID()
-        let startedAt = Date()
-    }
 
     private struct Particle {
         let degrees: Double
         let distance: CGFloat
         let delay: TimeInterval
         let size: CGFloat
+        let shadeStrength: Double
     }
 
-    private static let particles = [
-        Particle(degrees: -78, distance: 12, delay: 0.000, size: 1.6),
-        Particle(degrees: -50, distance: 15, delay: 0.015, size: 2.0),
-        Particle(degrees: -20, distance: 13, delay: 0.030, size: 1.6),
-        Particle(degrees: 8, distance: 16, delay: 0.000, size: 2.1),
-        Particle(degrees: 38, distance: 14, delay: 0.020, size: 1.8),
-        Particle(degrees: 72, distance: 12, delay: 0.040, size: 1.6),
+    private struct Burst {
+        let id = UUID()
+        let startedAt = Date()
+        let particles = CompletionParticleBurst.makeParticles()
+    }
+
+    private static let baseParticles = [
+        (distance: CGFloat(12), size: CGFloat(1.6)),
+        (distance: CGFloat(15), size: CGFloat(2.0)),
+        (distance: CGFloat(13), size: CGFloat(1.6)),
+        (distance: CGFloat(16), size: CGFloat(2.1)),
+        (distance: CGFloat(14), size: CGFloat(1.8)),
+        (distance: CGFloat(12), size: CGFloat(1.6)),
     ]
+
+    private static func makeParticles() -> [Particle] {
+        let rotation = Double.random(in: 0..<360)
+
+        return baseParticles.enumerated().map { index, particle in
+            let evenSpacing = Double(index) * (360 / Double(baseParticles.count))
+            return Particle(
+                degrees: rotation + evenSpacing + Double.random(in: -20...20),
+                distance: particle.distance * CGFloat.random(in: 0.78...1.12),
+                delay: Double(index) * 0.01,
+                size: particle.size * 1.1 * 1.15 * CGFloat.random(in: 0.82...1.24),
+                shadeStrength: Double.random(in: 0.14...0.32)
+            )
+        }
+    }
 
     private static let easeOut = UnitCurve.bezier(
         startControlPoint: UnitPoint(x: 0.23, y: 1),
@@ -202,8 +220,8 @@ private struct CompletionParticleBurst: View {
                 let elapsed = timeline.date.timeIntervalSince(burst.startedAt)
                 let origin = CGPoint(x: size.width / 2, y: size.height / 2)
 
-                for particle in Self.particles {
-                    let rawProgress = (elapsed - particle.delay) / 0.2
+                for particle in burst.particles {
+                    let rawProgress = (elapsed - particle.delay) / 0.3
                     guard rawProgress >= 0, rawProgress <= 1 else { continue }
 
                     let progress = min(max(rawProgress, 0), 1)
@@ -226,9 +244,11 @@ private struct CompletionParticleBurst: View {
                         height: diameter
                     )
 
+                    let path = Path(ellipseIn: rect)
+                    context.fill(path, with: .color(paperColor.opacity(opacity)))
                     context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(tint.opacity(opacity))
+                        path,
+                        with: .color(inkColor.opacity(opacity * particle.shadeStrength))
                     )
                 }
             }
@@ -251,7 +271,7 @@ private struct CompletionParticleBurst: View {
             guard let burstID = burst?.id else { return }
 
             do {
-                try await Task.sleep(for: .milliseconds(260))
+                try await Task.sleep(for: .milliseconds(360))
             } catch {
                 return
             }
@@ -623,6 +643,10 @@ struct StickyRootView: View {
 
                     addRowButton
                 }
+                // The checklist's content stays aligned at its original x,
+                // while its scroll viewport reaches into the paper inset so
+                // left-flying completion particles are not clipped.
+                .padding(.leading, contentInset)
             }
             .coordinateSpace(name: "checklist")
             .onPreferenceChange(ChecklistRowFramePreferenceKey.self) { frames in
@@ -652,6 +676,7 @@ struct StickyRootView: View {
             }
         }
         .frame(maxHeight: .infinity)
+        .padding(.leading, -contentInset)
     }
 
     private func keepFocusedRowVisible(using proxy: ScrollViewProxy) {
@@ -820,7 +845,8 @@ struct StickyRootView: View {
             .overlay {
                 CompletionParticleBurst(
                     isChecked: item.isDone,
-                    tint: color.ink.opacity(0.55)
+                    paperColor: color.paper,
+                    inkColor: color.ink
                 )
                 .frame(width: 46, height: 46)
                 .id(item.id)
