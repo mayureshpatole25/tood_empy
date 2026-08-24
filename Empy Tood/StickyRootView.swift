@@ -9,8 +9,257 @@ private struct ChecklistRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+private struct CompletionLineCountPreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: Int] = [:]
+
+    static func reduce(value: inout [UUID: Int], nextValue: () -> [UUID: Int]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
+
 private enum HoverMotion {
     static let feedback = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.14)
+}
+
+private enum CompletionMotion {
+    static let feedback = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)
+    static let strike = Animation.linear(duration: 0.2)
+    static let lineStagger: TimeInterval = 0.05
+
+    static func strikeMilliseconds(for lineCount: Int) -> Int64 {
+        200 + Int64(max(lineCount - 1, 0)) * 50
+    }
+}
+
+private enum CompletionTextLayout {
+    static func lineWidths(for text: String, font: NSFont, width: CGFloat) -> [CGFloat] {
+        guard width > 0 else { return [1] }
+
+        let storage = NSTextStorage(
+            string: text.isEmpty ? " " : text,
+            attributes: [.font: font]
+        )
+        let layoutManager = NSLayoutManager()
+        layoutManager.usesFontLeading = true
+
+        let container = NSTextContainer(
+            containerSize: CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        container.lineFragmentPadding = 0
+        container.lineBreakMode = .byWordWrapping
+        container.maximumNumberOfLines = 12
+
+        layoutManager.addTextContainer(container)
+        storage.addLayoutManager(layoutManager)
+        layoutManager.ensureLayout(for: container)
+
+        let glyphRange = layoutManager.glyphRange(for: container)
+        var widths: [CGFloat] = []
+        layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) {
+            _, usedRect, _, _, _ in
+            widths.append(max(usedRect.width, 1))
+        }
+        return widths.isEmpty ? [1] : Array(widths.prefix(12))
+    }
+}
+
+/// Mirrors the editable field's text layout, but renders only its decoration.
+/// Keeping it separate leaves the real TextField (and its caret) uninterrupted
+/// while each visual line reveals from left to right, then hands off to the
+/// next line from top to bottom.
+private struct CompletionStrikethrough: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let itemID: UUID
+    let text: String
+    let font: Font
+    let nsFont: NSFont
+    let color: Color
+    let isVisible: Bool
+
+    private var decoratedText: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(.clear)
+            .strikethrough(true, color: color)
+            .lineLimit(1...12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                GeometryReader { proxy in
+                    let lineCount = CompletionTextLayout.lineWidths(
+                        for: text,
+                        font: nsFont,
+                        width: proxy.size.width
+                    ).count
+
+                    Color.clear.preference(
+                        key: CompletionLineCountPreferenceKey.self,
+                        value: [itemID: lineCount]
+                    )
+                }
+            }
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if reduceMotion {
+            decoratedText
+                .opacity(isVisible ? 1 : 0)
+                .animation(CompletionMotion.feedback, value: isVisible)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            decoratedText
+                .opacity(isVisible ? 1 : 0)
+                .mask(alignment: .topLeading) {
+                    CompletionStrikethroughMask(
+                        text: text,
+                        font: nsFont,
+                        isVisible: isVisible
+                    )
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+private struct CompletionStrikethroughMask: View {
+    let text: String
+    let font: NSFont
+    let isVisible: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            let lineWidths = CompletionTextLayout.lineWidths(
+                for: text,
+                font: font,
+                width: proxy.size.width
+            )
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lineWidths.enumerated()), id: \.offset) { index, lineWidth in
+                    Rectangle()
+                        .frame(width: lineWidth)
+                        .frame(maxHeight: .infinity)
+                        .scaleEffect(
+                            x: isVisible ? 1 : 0.001,
+                            y: 1,
+                            anchor: .leading
+                        )
+                        .animation(
+                            isVisible
+                                ? CompletionMotion.strike.delay(Double(index) * CompletionMotion.lineStagger)
+                                : CompletionMotion.strike,
+                            value: isVisible
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+private struct CompletionParticleBurst: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    let isChecked: Bool
+    let tint: Color
+
+    @State private var burst: Burst?
+
+    private struct Burst {
+        let id = UUID()
+        let startedAt = Date()
+    }
+
+    private struct Particle {
+        let degrees: Double
+        let distance: CGFloat
+        let delay: TimeInterval
+        let size: CGFloat
+    }
+
+    private static let particles = [
+        Particle(degrees: -78, distance: 12, delay: 0.000, size: 1.6),
+        Particle(degrees: -50, distance: 15, delay: 0.015, size: 2.0),
+        Particle(degrees: -20, distance: 13, delay: 0.030, size: 1.6),
+        Particle(degrees: 8, distance: 16, delay: 0.000, size: 2.1),
+        Particle(degrees: 38, distance: 14, delay: 0.020, size: 1.8),
+        Particle(degrees: 72, distance: 12, delay: 0.040, size: 1.6),
+    ]
+
+    private static let easeOut = UnitCurve.bezier(
+        startControlPoint: UnitPoint(x: 0.23, y: 1),
+        endControlPoint: UnitPoint(x: 0.32, y: 1)
+    )
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 60, paused: burst == nil)) { timeline in
+            Canvas { context, size in
+                guard let burst else { return }
+
+                let elapsed = timeline.date.timeIntervalSince(burst.startedAt)
+                let origin = CGPoint(x: size.width / 2, y: size.height / 2)
+
+                for particle in Self.particles {
+                    let rawProgress = (elapsed - particle.delay) / 0.2
+                    guard rawProgress >= 0, rawProgress <= 1 else { continue }
+
+                    let progress = min(max(rawProgress, 0), 1)
+                    let easedProgress = CGFloat(Self.easeOut.value(at: progress))
+                    let angle = CGFloat(particle.degrees * .pi / 180)
+                    let radius = 5.5 + particle.distance * easedProgress
+                    let diameter = particle.size * (1 - 0.25 * CGFloat(progress))
+                    let fadeIn = min(1, progress / 0.08)
+                    let fadeOut = 1 - max(0, (progress - 0.35) / 0.65)
+                    let opacity = fadeIn * fadeOut
+
+                    let center = CGPoint(
+                        x: origin.x + cos(angle) * radius,
+                        y: origin.y + sin(angle) * radius
+                    )
+                    let rect = CGRect(
+                        x: center.x - diameter / 2,
+                        y: center.y - diameter / 2,
+                        width: diameter,
+                        height: diameter
+                    )
+
+                    context.fill(
+                        Path(ellipseIn: rect),
+                        with: .color(tint.opacity(opacity))
+                    )
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onChange(of: isChecked) { wasChecked, isChecked in
+            if !wasChecked, isChecked, !reduceMotion {
+                burst = Burst()
+            } else if !isChecked || reduceMotion {
+                burst = nil
+            }
+        }
+        .onChange(of: reduceMotion) { _, shouldReduce in
+            if shouldReduce {
+                burst = nil
+            }
+        }
+        .task(id: burst?.id) {
+            guard let burstID = burst?.id else { return }
+
+            do {
+                try await Task.sleep(for: .milliseconds(260))
+            } catch {
+                return
+            }
+
+            guard burst?.id == burstID else { return }
+            burst = nil
+        }
+    }
 }
 
 private struct HoverFeedbackModifier: ViewModifier {
@@ -56,6 +305,7 @@ struct StickyRootView: View {
     @State private var retainedCompletionIDs: Set<UUID> = []
     @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
     @State private var completionExitGenerations: [UUID: UUID] = [:]
+    @State private var completionLineCounts: [UUID: Int] = [:]
     @State private var reduceMotionEnabled = false
     @State private var rowFrames: [UUID: CGRect] = [:]
     @State private var draggingItemID: UUID?
@@ -378,6 +628,9 @@ struct StickyRootView: View {
             .onPreferenceChange(ChecklistRowFramePreferenceKey.self) { frames in
                 rowFrames = frames
             }
+            .onPreferenceChange(CompletionLineCountPreferenceKey.self) { lineCounts in
+                completionLineCounts = lineCounts
+            }
             .scrollIndicators(.automatic)
             .onChange(of: focusedID) { _, id in
                 guard let id else { return }
@@ -461,27 +714,38 @@ struct StickyRootView: View {
                     // Keep completed rows editable too. Because this stays the
                     // same TextField when isDone changes, its caret survives a
                     // keyboard toggle and Command-Return can toggle it back.
-                    TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(bodyFont(14))
-                        .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
-                        .strikethrough(item.isDone, color: color.inkSecondary)
-                        .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
-                        .lineLimit(1...12)
-                        .focused($focusedID, equals: item.id)
-                        .onChange(of: bindingValue(item)) { _, newValue in
-                            handleDash(item, newValue)
-                        }
-                        .onKeyPress(.return, phases: .down) { press in
-                            if press.modifiers.contains(.command) {
-                                toggleDone(item)
-                            } else {
-                                submit(item)
+                    ZStack(alignment: .leading) {
+                        TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(bodyFont(14))
+                            .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+                            .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                            .lineLimit(1...12)
+                            .focused($focusedID, equals: item.id)
+                            .onChange(of: bindingValue(item)) { _, newValue in
+                                handleDash(item, newValue)
                             }
-                            return .handled
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                        .contentShape(Rectangle())
+                            .onKeyPress(.return, phases: .down) { press in
+                                if press.modifiers.contains(.command) {
+                                    toggleDone(item)
+                                } else {
+                                    submit(item)
+                                }
+                                return .handled
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                            .contentShape(Rectangle())
+
+                        CompletionStrikethrough(
+                            itemID: item.id,
+                            text: bindingValue(item),
+                            font: bodyFont(14),
+                            nsFont: bodyNSFont(14),
+                            color: color.inkSecondary,
+                            isVisible: item.isDone
+                        )
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                 }
                 .padding(.vertical, 6)
 
@@ -537,19 +801,30 @@ struct StickyRootView: View {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(color.ink.opacity(checkboxOpacity))
                         .frame(width: 13, height: 13)
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(color.paper)
                 } else {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .stroke(color.ink.opacity(checkboxOpacity), lineWidth: 1.1)
                         .frame(width: 13, height: 13)
                 }
+                Image(systemName: "checkmark")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(color.paper)
+                    .opacity(item.isDone ? 1 : 0)
+                    .scaleEffect(accessibilityReduceMotion || item.isDone ? 1 : 0.92)
+                    .animation(CompletionMotion.feedback, value: item.isDone)
             }
-            // Scale only the visual checkbox, not its hit frame. Anchoring
-            // hover growth to the leading edge keeps it inside the scroll
-            // view instead of clipping against that boundary.
+            .frame(width: 13, height: 13)
+            // Keep press/hover feedback on the checkbox itself so it neither
+            // scales the hit frame nor stretches the particle travel.
             .scaleEffect(checkboxScale, anchor: checkboxScaleAnchor)
+            .overlay {
+                CompletionParticleBurst(
+                    isChecked: item.isDone,
+                    tint: color.ink.opacity(0.55)
+                )
+                .frame(width: 46, height: 46)
+                .id(item.id)
+            }
             .padding(.leading, 1)
             // The visual checkbox shares the exact left edge used by the
             // date and title, inset by one point so the centered border
@@ -732,10 +1007,13 @@ struct StickyRootView: View {
 
         retainedCompletionIDs.insert(id)
         let generation = UUID()
+        let retentionMilliseconds = reduceMotionEnabled
+            ? Int64(120)
+            : CompletionMotion.strikeMilliseconds(for: completionLineCounts[id] ?? 1)
         completionExitGenerations[id] = generation
         completionExitTasks[id] = Task { @MainActor in
             do {
-                try await Task.sleep(for: .milliseconds(120))
+                try await Task.sleep(for: .milliseconds(retentionMilliseconds))
             } catch {
                 return
             }
@@ -1087,6 +1365,15 @@ struct StickyRootView: View {
 
     private func bodyFont(_ size: CGFloat) -> Font {
         model.font.body(size)
+    }
+
+    private func bodyNSFont(_ size: CGFloat) -> NSFont {
+        let pointSize = size + model.font.sizeAdjustment
+        if model.font == .helvetica {
+            return .systemFont(ofSize: pointSize)
+        }
+        return NSFont(name: model.font.fontName, size: pointSize)
+            ?? .systemFont(ofSize: pointSize)
     }
 
     private static let dateFormatter: DateFormatter = {
