@@ -28,6 +28,8 @@ struct HomeView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var locationLabel: String?
+    @State private var hoveredStickyID: UUID?
+    @State private var stickyDropTargetID: UUID?
     private var archivedEntries: [ArchivedSticky] { manager.archivedStickies }
 
     private let desk = Color(hex: 0xFBF8F1)
@@ -252,9 +254,10 @@ struct HomeView: View {
             } else {
                 GeometryReader { proxy in
                     ZStack(alignment: .topLeading) {
-                        let positions = fanPositions(
+                        let positions = StickyFanLayout.positions(
                             count: archivedEntries.count,
-                            availableWidth: proxy.size.width
+                            availableWidth: proxy.size.width,
+                            cardWidth: DeskCardMetrics.width
                         )
                         ForEach(Array(archivedEntries.enumerated()), id: \.element.id) { index, entry in
                             let model = StickyModel(data: entry.data)
@@ -321,7 +324,7 @@ struct HomeView: View {
     }
 
     /// No scroll view, no clipping, no fade — the fan just gets denser as
-    /// more stickies are added (see `fanPositions`), always fitting the
+    /// more stickies are added, always fitting the
     /// available width instead of needing to scroll past an edge. That also
     /// means shadows render in full; nothing's there to cut them off.
     private var stickiesFan: some View {
@@ -332,13 +335,49 @@ struct HomeView: View {
                 GeometryReader { proxy in
                     ZStack(alignment: .topLeading) {
                         let count = manager.order.count
-                        let positions = fanPositions(count: count, availableWidth: proxy.size.width)
+                        let positions = StickyFanLayout.positions(
+                            count: count,
+                            availableWidth: proxy.size.width,
+                            cardWidth: DeskCardMetrics.width
+                        )
                         ForEach(Array(manager.order.enumerated()), id: \.element) { index, id in
                             if let controller = manager.controllers[id] {
-                                StickyDeskCard(model: controller.model) { manager.bringToFront(id) }
+                                let shortcut = StickySelectionShortcut
+                                    .keyEquivalent(forStickyIndex: index)
+                                    .map { "⌃\($0)" }
+                                StickyDeskCard(
+                                    model: controller.model,
+                                    shortcutLabel: shortcut,
+                                    isDropTargeted: stickyDropTargetID == id,
+                                    hoverLiftDistance: 24,
+                                    onHoverChange: { isHovering in
+                                        if isHovering {
+                                            hoveredStickyID = id
+                                        } else if hoveredStickyID == id {
+                                            hoveredStickyID = nil
+                                        }
+                                    },
+                                    onShow: { manager.bringToFront(id) }
+                                )
                                     .rotationEffect(.degrees(rotation(for: index)))
                                     .offset(x: positions[index], y: verticalOffset(for: index))
-                                    .zIndex(Double(index))
+                                    .zIndex(hoveredStickyID == id ? Double(count + 1) : Double(index))
+                                    .draggable(id.uuidString)
+                                    .dropDestination(
+                                        for: String.self,
+                                        action: { values, _ in
+                                            guard let value = values.first,
+                                                  let sourceID = UUID(uuidString: value) else { return false }
+                                            return manager.moveSticky(sourceID, to: index)
+                                        },
+                                        isTargeted: { isTargeted in
+                                            if isTargeted {
+                                                stickyDropTargetID = id
+                                            } else if stickyDropTargetID == id {
+                                                stickyDropTargetID = nil
+                                            }
+                                        }
+                                    )
                                     .transition(.scale(scale: 0.85).combined(with: .opacity))
                             }
                         }
@@ -380,35 +419,6 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    /// Left-to-right x offsets for each card. Starts at a comfortable,
-    /// mostly-unoverlapped spacing and each gap decays geometrically — fanned
-    /// out on the left, progressively closer/"stuck together" toward the
-    /// right. If that natural sequence would still run past the available
-    /// width (many stickies), the whole sequence is scaled down uniformly so
-    /// everything fits — cards compress into a tighter stack rather than
-    /// ever needing to scroll.
-    private func fanPositions(count: Int, availableWidth: CGFloat) -> [CGFloat] {
-        guard count > 0 else { return [] }
-        let cardWidth = DeskCardMetrics.width
-        let baseStep: CGFloat = 105
-        let decay: CGFloat = 0.8
-
-        let deltas: [CGFloat] = (0..<(count - 1)).map { i in
-            baseStep * CGFloat(pow(Double(decay), Double(i)))
-        }
-        let rawSpan = deltas.reduce(0, +)
-        let maxSpan = max(0, availableWidth - cardWidth)
-        let scale = (rawSpan > maxSpan && rawSpan > 0) ? maxSpan / rawSpan : 1
-
-        var positions: [CGFloat] = [0]
-        var x: CGFloat = 0
-        for delta in deltas {
-            x += delta * scale
-            positions.append(x)
-        }
-        return positions
     }
 
     private func rotation(for index: Int) -> Double {
@@ -454,8 +464,13 @@ struct HomeView: View {
 struct StickyDeskCard: View {
     let model: StickyModel
     var hoverHint: String = "Pop out"
+    var shortcutLabel: String? = nil
+    var isDropTargeted = false
+    var hoverLiftDistance: CGFloat = 9
+    var onHoverChange: (Bool) -> Void = { _ in }
     var onShow: () -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
     @State private var hoveringCorner = false
 
@@ -501,9 +516,23 @@ struct StickyDeskCard: View {
                 .padding(18)
                 .frame(width: DeskCardMetrics.width, height: DeskCardMetrics.height, alignment: .topLeading)
                 .background(model.color.paper, in: RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous)
+                        .stroke(Color.accentColor.opacity(isDropTargeted ? 0.85 : 0), lineWidth: 2)
+                }
                 .shadow(color: .black.opacity(hovering ? 0.28 : 0.2), radius: hovering ? 20 : 13, y: hovering ? 12 : 8)
-                .scaleEffect(hovering ? 1.02 : 1)
-                .offset(y: hovering ? -9 : 0)
+                .scaleEffect(hovering && !reduceMotion ? 1.02 : 1)
+                .offset(y: hoverLift)
+
+                if let shortcutLabel {
+                    Text(shortcutLabel)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color(hex: 0x20211E).opacity(0.48))
+                        .frame(width: DeskCardMetrics.width, alignment: .center)
+                        .offset(y: -40)
+                        .opacity(hovering ? 1 : 0)
+                        .accessibilityHidden(true)
+                }
 
                 if hoveringCorner {
                     Text(hoverHint)
@@ -512,13 +541,17 @@ struct StickyDeskCard: View {
                         .padding(.vertical, 4)
                         .background(.black.opacity(0.8), in: Capsule())
                         .foregroundStyle(.white)
-                        .offset(x: -10, y: 10)
+                        .offset(x: -10, y: hoverLift + 10)
                         .transition(.opacity)
                 }
             }
         }
         .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .onHover { isHovering in
+            hovering = isHovering
+            if !isHovering { hoveringCorner = false }
+            onHoverChange(isHovering)
+        }
         .overlay(alignment: .topTrailing) {
             // A dedicated hover target just for the corner, matching the
             // request that "Pop out" only appears there, not the whole card.
@@ -526,8 +559,12 @@ struct StickyDeskCard: View {
                 .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
                 .onHover { hoveringCorner = $0 }
-                .offset(y: hovering ? -9 : 0)
+                .offset(y: hoverLift)
         }
-        .animation(.easeInOut(duration: 0.15), value: hovering)
+        .animation(.easeInOut(duration: 0.16), value: hovering)
+    }
+
+    private var hoverLift: CGFloat {
+        hovering && !reduceMotion ? -hoverLiftDistance : 0
     }
 }

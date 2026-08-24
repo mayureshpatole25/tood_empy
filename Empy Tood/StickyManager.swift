@@ -10,7 +10,8 @@ import Observation
 @Observable
 final class StickyManager {
     private(set) var controllers: [UUID: StickyController] = [:]
-    /// Preserves creation order for the status menu / cascading.
+    /// User-controlled order for Home, the status menu, Control-number
+    /// shortcuts, persistence, and new-sticky cascading.
     private(set) var order: [UUID] = []
     /// The sticky most recently brought to front or clicked into — what the
     /// global "show active sticky" shortcut jumps to.
@@ -220,6 +221,16 @@ final class StickyManager {
         return true
     }
 
+    /// Moves a sticky to its final list index. Persist immediately because
+    /// the order also determines the Control-number shortcuts.
+    @discardableResult
+    func moveSticky(_ id: UUID, to destinationIndex: Int) -> Bool {
+        guard controllers[id] != nil,
+              StickyOrder.move(id, to: destinationIndex, in: &order) else { return false }
+        saveNow()
+        return true
+    }
+
     /// Called by `StickyController` (bringToFront, or the window becoming
     /// key from a plain click) so "show active sticky" always jumps to
     /// whichever one you actually used last.
@@ -253,7 +264,7 @@ final class StickyManager {
         }
     }
 
-    /// (title, id) pairs in creation order for the status menu.
+    /// (title, id) pairs in the persisted user-controlled order.
     func stickyList() -> [(title: String, id: UUID)] {
         order.compactMap { id in
             guard let c = controllers[id] else { return nil }
