@@ -175,6 +175,20 @@ final class StickyModel: Identifiable {
         onChange?()
     }
 
+    /// Adds a task captured outside the sticky. Reuse the factory's empty
+    /// starter row when possible so quick capture never leaves a blank item
+    /// above the task it just added.
+    func addCapturedItem(_ text: String) {
+        if let index = items.firstIndex(where: {
+            !$0.isDone && $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) {
+            items[index].text = text
+        } else {
+            items.append(TodoItem(text: text))
+        }
+        onChange?()
+    }
+
     /// Splits a multi-line paste into one item per line. If the target row
     /// is still empty, the first line fills it and the rest become new
     /// items after it; otherwise the whole paste becomes new items after

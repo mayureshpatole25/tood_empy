@@ -58,12 +58,16 @@ struct SettingsView: View {
                 LabeledContent("New Sticky") {
                     ShortcutRecorderField(combo: $settings.newStickyShortcut)
                 }
+                LabeledContent("Quick Capture") {
+                    ShortcutRecorderField(combo: $settings.quickCaptureShortcut)
+                }
                 Text("Works anywhere, even while another app is frontmost.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .onChange(of: settings.showStickyShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
             .onChange(of: settings.newStickyShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
+            .onChange(of: settings.quickCaptureShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 480)

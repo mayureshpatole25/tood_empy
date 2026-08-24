@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindow: HostedWindowController<SettingsView>?
     private var onboardingWindow: HostedWindowController<OnboardingView>?
     private var introWindow: HostedWindowController<IntroFallView>?
+    private var quickCaptureController: QuickCaptureController?
     private var applicationShortcutMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -41,13 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self, AppSettings.shared.onboardingCompleted else { return event }
             let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
 
-            if modifiers == [.control],
-               let key = event.charactersIgnoringModifiers?.lowercased(),
-               let index = StickySelectionShortcut.stickyIndex(forKeyEquivalent: key),
-               self.manager.focusSticky(atShortcutIndex: index) {
-                return nil
-            }
-
             guard modifiers == [.command, .shift] else { return event }
 
             switch event.charactersIgnoringModifiers?.lowercased() {
@@ -67,8 +61,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
             self?.manager.newSticky()
         }
+        GlobalHotKeyManager.shared.onQuickCapture = { [weak self] in
+            self?.showQuickCapture()
+        }
+        GlobalHotKeyManager.shared.onOpenStickyPicker = { [weak self] in
+            self?.showQuickCapture(mode: .openSticky)
+        }
         GlobalHotKeyManager.shared.onArrange = { [weak self] arrangement in
             self?.manager.arrangeOpenStickies(arrangement)
+        }
+        GlobalHotKeyManager.shared.onSelectSticky = { [weak self] index in
+            self?.manager.focusSticky(atShortcutIndex: index)
         }
         GlobalHotKeyManager.shared.reregister()
 
@@ -133,6 +136,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         settingsWindow?.present()
+    }
+
+    private func showQuickCapture(mode: QuickCaptureMode = .capture) {
+        guard AppSettings.shared.onboardingCompleted else { return }
+        if quickCaptureController == nil {
+            quickCaptureController = QuickCaptureController(manager: manager)
+        }
+        quickCaptureController?.present(mode: mode)
     }
 
     private func showIntro() {

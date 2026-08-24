@@ -42,6 +42,10 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(newStickyShortcut.rawValue, forKey: Keys.newShortcut) }
     }
 
+    var quickCaptureShortcut: KeyCombo {
+        didSet { UserDefaults.standard.set(quickCaptureShortcut.rawValue, forKey: Keys.quickCaptureShortcut) }
+    }
+
     /// Retained only so existing on-disk journal data remains compatible if
     /// this legacy model is decoded. Journal is no longer exposed in the UI.
     var journalPrompt: String {
@@ -80,6 +84,7 @@ final class AppSettings {
         completionAnimationsEnabled = d.object(forKey: Keys.completionAnimationsEnabled) as? Bool ?? true
         showStickyShortcut = d.string(forKey: Keys.showShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultShowSticky
         newStickyShortcut = d.string(forKey: Keys.newShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultNewSticky
+        quickCaptureShortcut = d.string(forKey: Keys.quickCaptureShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultQuickCapture
         journalPrompt = d.string(forKey: Keys.journalPrompt) ?? "What's actually on your mind today?"
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
@@ -93,6 +98,7 @@ final class AppSettings {
         static let completionAnimationsEnabled = "today.completionAnimationsEnabled"
         static let showShortcut = "today.showStickyShortcut"
         static let newShortcut = "today.newStickyShortcut"
+        static let quickCaptureShortcut = "today.quickCaptureShortcut"
         static let journalPrompt = "today.journalPrompt"
         static let journalLocation = "today.journalLocationEnabled"
         static let userName = "today.userName"
