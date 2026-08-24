@@ -21,6 +21,31 @@ private enum HoverMotion {
     static let feedback = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.14)
 }
 
+private enum DoneItemsFilter: String, CaseIterable, Identifiable {
+    case today = "Today"
+    case thisWeek = "This Week"
+    case thisMonth = "This Month"
+    case allTime = "All Time"
+
+    var id: Self { self }
+
+    func includes(_ completedAt: Date?, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        guard self != .allTime else { return true }
+        guard let completedAt else { return false }
+
+        switch self {
+        case .today:
+            return calendar.isDate(completedAt, inSameDayAs: now)
+        case .thisWeek:
+            return calendar.dateInterval(of: .weekOfYear, for: now)?.contains(completedAt) == true
+        case .thisMonth:
+            return calendar.dateInterval(of: .month, for: now)?.contains(completedAt) == true
+        case .allTime:
+            return true
+        }
+    }
+}
+
 private enum CompletionMotion {
     static let feedback = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)
     static let strike = Animation.linear(duration: 0.2)
@@ -334,6 +359,7 @@ struct StickyRootView: View {
     @State private var hoveringTopChrome = false
     @State private var showColors = false
     @State private var showsDoneTasks = false
+    @State private var doneItemsFilter: DoneItemsFilter = .allTime
     @State private var retainedCompletionIDs: Set<UUID> = []
     @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
     @State private var completionExitGenerations: [UUID: UUID] = [:]
@@ -719,8 +745,9 @@ struct StickyRootView: View {
     /// while shown, completion and drag operations retain the resulting order.
     private var displayedItems: [TodoItem] {
         model.orderedItems.filter {
-            showsDoneTasks ||
-            !$0.isDone || retainedCompletionIDs.contains($0.id)
+            !$0.isDone ||
+            retainedCompletionIDs.contains($0.id) ||
+            (showsDoneTasks && doneItemsFilter.includes($0.completedAt))
         }
     }
 
@@ -1168,14 +1195,40 @@ struct StickyRootView: View {
         VStack {
             Spacer()
             HStack(spacing: 18) {
-                Button { toggleDoneTaskVisibility() } label: {
-                    Image(systemName: showsDoneTasks ? "eye" : "eye.slash")
+                HStack(spacing: 7) {
+                    Button { toggleDoneTaskVisibility() } label: {
+                        Image(systemName: showsDoneTasks ? "eye" : "eye.slash")
+                    }
+                    .disabled(doneTaskCount == 0)
+                    .opacity(doneTaskCount == 0 ? 0.25 : 1)
+                    .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
+                    .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
+                    .help(showsDoneTasks ? "Hide done items (⌘S)" : "Show \(doneTaskCount) done items (⌘S)")
+
+                    Menu {
+                        ForEach(DoneItemsFilter.allCases) { filter in
+                            Button {
+                                doneItemsFilter = filter
+                            } label: {
+                                if doneItemsFilter == filter {
+                                    Label(filter.rawValue, systemImage: "checkmark")
+                                } else {
+                                    Text(filter.rawValue)
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .bold))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(doneTaskCount == 0)
+                    .opacity(doneTaskCount == 0 ? 0.25 : 1)
+                    .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
+                    .accessibilityLabel("Filter done items")
+                    .help("Filter done items: \(doneItemsFilter.rawValue)")
                 }
-                .disabled(doneTaskCount == 0)
-                .opacity(doneTaskCount == 0 ? 0.25 : 1)
-                .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
-                .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
-                .help(showsDoneTasks ? "Hide done items (⌘S)" : "Show \(doneTaskCount) done items (⌘S)")
 
                 Button { showColors.toggle() } label: { Image(systemName: "paintpalette") }
                     .hoverFeedback(scale: 1.1, darkening: -0.05)

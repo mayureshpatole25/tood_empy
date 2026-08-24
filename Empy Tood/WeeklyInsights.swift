@@ -2,8 +2,7 @@ import Foundation
 
 /// A single completed task as shown in the Home insight card. Enough to
 /// render a colored dot (from whichever sticky it lived on) and its exact
-/// text, without the card needing to touch `StickyModel`/`ArchivedItem`
-/// directly.
+/// text without the card needing to touch `StickyModel` directly.
 struct CompletedTaskDisplay: Identifiable {
     let id: UUID
     let text: String
@@ -34,7 +33,7 @@ struct DayCompletions: Identifiable {
 }
 
 /// Everything the Home screen's insight stat needs to render, computed fresh
-/// on demand from `StickyManager`/`JournalStore`/`ArchiveService`. Nothing
+/// on demand from `StickyManager` and `JournalStore`. Nothing
 /// here is cached or stored, so it's always exactly as current as the data
 /// it's built from.
 struct WeeklyInsightsSnapshot {
@@ -70,18 +69,9 @@ enum WeeklyInsights {
         let today = cal.startOfDay(for: now)
         let weekInterval = cal.dateInterval(of: .weekOfYear, for: now) ?? DateInterval(start: today, duration: 86400 * 7)
 
-        let todaysCompleted = manager.completedTodayDisplay()
-        let archived = manager.archive.load()
-
-        // Completions for the rest of the week come from the archive
-        // (already rolled over each night); today's are still live.
-        let weekArchived = archived.filter {
-            guard let completedAt = $0.completedAt else { return false }
-            return weekInterval.contains(completedAt) && !cal.isDateInToday(completedAt)
-        }
-        let weekCompletions = weekArchived.map {
-            CompletedTaskDisplay(id: $0.id, text: $0.text, color: $0.stickyColor ?? .pink, completedAt: $0.completedAt ?? now)
-        } + todaysCompleted
+        let allCompletions = manager.completedItemsDisplay()
+        let todaysCompleted = allCompletions.filter { cal.isDateInToday($0.completedAt) }
+        let weekCompletions = allCompletions.filter { weekInterval.contains($0.completedAt) }
 
         let weekByDay = Dictionary(grouping: weekCompletions) { cal.startOfDay(for: $0.completedAt) }
             .map { DayCompletions(day: $0.key, tasks: $0.value.sorted { $0.completedAt < $1.completedAt }) }
@@ -90,12 +80,10 @@ enum WeeklyInsights {
         // Day → count, for streak + yesterday, spanning a little past this
         // week so a streak can be traced back across a week boundary.
         var countsByDay: [Date: Int] = [:]
-        for item in archived {
-            guard let completedAt = item.completedAt else { continue }
-            let day = cal.startOfDay(for: completedAt)
+        for item in allCompletions {
+            let day = cal.startOfDay(for: item.completedAt)
             countsByDay[day, default: 0] += 1
         }
-        countsByDay[today, default: 0] += todaysCompleted.count
 
         let yesterday = cal.date(byAdding: .day, value: -1, to: today) ?? today
         let yesterdayCount = countsByDay[yesterday, default: 0]
