@@ -28,8 +28,6 @@ struct HomeView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var locationLabel: String?
-    @State private var hoveredStickyID: UUID?
-    @State private var stickyDropTargetID: UUID?
     private var archivedEntries: [ArchivedSticky] { manager.archivedStickies }
 
     private let desk = Color(hex: 0xFBF8F1)
@@ -348,36 +346,14 @@ struct HomeView: View {
                                 StickyDeskCard(
                                     model: controller.model,
                                     shortcutLabel: shortcut,
-                                    isDropTargeted: stickyDropTargetID == id,
-                                    hoverLiftDistance: 24,
-                                    onHoverChange: { isHovering in
-                                        if isHovering {
-                                            hoveredStickyID = id
-                                        } else if hoveredStickyID == id {
-                                            hoveredStickyID = nil
-                                        }
-                                    },
+                                    hoverLiftDistance: 66,
                                     onShow: { manager.bringToFront(id) }
                                 )
                                     .rotationEffect(.degrees(rotation(for: index)))
                                     .offset(x: positions[index], y: verticalOffset(for: index))
-                                    .zIndex(hoveredStickyID == id ? Double(count + 1) : Double(index))
-                                    .draggable(id.uuidString)
-                                    .dropDestination(
-                                        for: String.self,
-                                        action: { values, _ in
-                                            guard let value = values.first,
-                                                  let sourceID = UUID(uuidString: value) else { return false }
-                                            return manager.moveSticky(sourceID, to: index)
-                                        },
-                                        isTargeted: { isTargeted in
-                                            if isTargeted {
-                                                stickyDropTargetID = id
-                                            } else if stickyDropTargetID == id {
-                                                stickyDropTargetID = nil
-                                            }
-                                        }
-                                    )
+                                    // Preserve the fan's existing overlap order while
+                                    // hovering; the card itself supplies the small lift.
+                                    .zIndex(Double(index))
                                     .transition(.scale(scale: 0.85).combined(with: .opacity))
                             }
                         }
@@ -465,9 +441,7 @@ struct StickyDeskCard: View {
     let model: StickyModel
     var hoverHint: String = "Pop out"
     var shortcutLabel: String? = nil
-    var isDropTargeted = false
     var hoverLiftDistance: CGFloat = 9
-    var onHoverChange: (Bool) -> Void = { _ in }
     var onShow: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -475,82 +449,79 @@ struct StickyDeskCard: View {
     @State private var hoveringCorner = false
 
     var body: some View {
-        Button(action: onShow) {
-            ZStack(alignment: .topTrailing) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(model.title.isEmpty ? "To Do" : model.title)
-                        .font(.custom("HelveticaNeue", size: 17))
-                        .foregroundStyle(model.color.titleInk)
-                        .lineLimit(1)
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(model.title.isEmpty ? "To Do" : model.title)
+                    .font(.custom("HelveticaNeue", size: 17))
+                    .foregroundStyle(model.color.titleInk)
+                    .lineLimit(1)
 
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(model.items.prefix(3)) { item in
-                            HStack(spacing: 8) {
-                                // Same shape/values as the real sticky's checkbox
-                                // (StickyRootView.checkbox), just not interactive here.
-                                ZStack {
-                                    if item.isDone {
-                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                            .fill(model.color.ink.opacity(0.3))
-                                            .frame(width: 11, height: 11)
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 7, weight: .bold))
-                                            .foregroundStyle(model.color.paper)
-                                    } else {
-                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                            .stroke(model.color.ink.opacity(0.3), lineWidth: 1.1)
-                                            .frame(width: 11, height: 11)
-                                    }
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(model.items.prefix(3)) { item in
+                        HStack(spacing: 8) {
+                            // Same shape/values as the real sticky's checkbox
+                            // (StickyRootView.checkbox), just not interactive here.
+                            ZStack {
+                                if item.isDone {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .fill(model.color.ink.opacity(0.3))
+                                        .frame(width: 11, height: 11)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 7, weight: .bold))
+                                        .foregroundStyle(model.color.paper)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .stroke(model.color.ink.opacity(0.3), lineWidth: 1.1)
+                                        .frame(width: 11, height: 11)
                                 }
-                                .frame(width: 11, height: 11)
-                                Text(item.text.isEmpty ? " " : item.text)
-                                    .font(model.font.body(12.5))
-                                    .foregroundStyle(item.isDone ? model.color.inkSecondary : model.color.ink.opacity(0.8))
-                                    .strikethrough(item.isDone, color: model.color.inkSecondary)
-                                    .lineLimit(1)
                             }
+                            .frame(width: 11, height: 11)
+                            Text(item.text.isEmpty ? " " : item.text)
+                                .font(model.font.body(12.5))
+                                .foregroundStyle(item.isDone ? model.color.inkSecondary : model.color.ink.opacity(0.8))
+                                .strikethrough(item.isDone, color: model.color.inkSecondary)
+                                .lineLimit(1)
                         }
                     }
-                    Spacer(minLength: 0)
                 }
-                .padding(18)
-                .frame(width: DeskCardMetrics.width, height: DeskCardMetrics.height, alignment: .topLeading)
-                .background(model.color.paper, in: RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous)
-                        .stroke(Color.accentColor.opacity(isDropTargeted ? 0.85 : 0), lineWidth: 2)
-                }
-                .shadow(color: .black.opacity(hovering ? 0.28 : 0.2), radius: hovering ? 20 : 13, y: hovering ? 12 : 8)
-                .scaleEffect(hovering && !reduceMotion ? 1.02 : 1)
-                .offset(y: hoverLift)
+                Spacer(minLength: 0)
+            }
+            .padding(18)
+            .frame(width: DeskCardMetrics.width, height: DeskCardMetrics.height, alignment: .topLeading)
+            .background(model.color.paper, in: RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous))
+            .shadow(color: .black.opacity(hovering ? 0.28 : 0.2), radius: hovering ? 20 : 13, y: hovering ? 12 : 8)
+            .scaleEffect(hovering && !reduceMotion ? 1.02 : 1)
+            .offset(y: hoverLift)
 
-                if let shortcutLabel {
-                    Text(shortcutLabel)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color(hex: 0x20211E).opacity(0.48))
-                        .frame(width: DeskCardMetrics.width, alignment: .center)
-                        .offset(y: -40)
-                        .opacity(hovering ? 1 : 0)
-                        .accessibilityHidden(true)
-                }
+            if let shortcutLabel {
+                Text(shortcutLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(hex: 0x20211E).opacity(0.48))
+                    .frame(width: DeskCardMetrics.width, alignment: .center)
+                    .offset(y: hoverLift - 40)
+                    .opacity(hovering ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
 
-                if hoveringCorner {
-                    Text(hoverHint)
-                        .font(.system(size: 10, weight: .medium))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(.black.opacity(0.8), in: Capsule())
-                        .foregroundStyle(.white)
-                        .offset(x: -10, y: hoverLift + 10)
-                        .transition(.opacity)
-                }
+            if hoveringCorner {
+                Text(hoverHint)
+                    .font(.system(size: 10, weight: .medium))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 4)
+                    .background(.black.opacity(0.8), in: Capsule())
+                    .foregroundStyle(.white)
+                    .offset(x: -10, y: hoverLift + 10)
+                    .transition(.opacity)
             }
         }
-        .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: DeskCardMetrics.cornerRadius, style: .continuous))
+        .onTapGesture(perform: onShow)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text("Open sticky"), onShow)
         .onHover { isHovering in
             hovering = isHovering
             if !isHovering { hoveringCorner = false }
-            onHoverChange(isHovering)
         }
         .overlay(alignment: .topTrailing) {
             // A dedicated hover target just for the corner, matching the
@@ -561,7 +532,7 @@ struct StickyDeskCard: View {
                 .onHover { hoveringCorner = $0 }
                 .offset(y: hoverLift)
         }
-        .animation(.easeInOut(duration: 0.16), value: hovering)
+        .animation(.easeOut(duration: 0.2), value: hovering)
     }
 
     private var hoverLift: CGFloat {
