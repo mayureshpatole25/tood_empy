@@ -27,10 +27,9 @@ struct SettingsView: View {
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
             }
 
-            Section("Journal") {
-                TextField("Prompt", text: $settings.journalPrompt)
-                Toggle("Stamp entries with your location", isOn: $settings.journalLocationEnabled)
-                Text("Journal entries are stored locally only, never sent anywhere.")
+            Section("Animations") {
+                Toggle("Animate completed items", isOn: $settings.completionAnimationsEnabled)
+                Text("When off, checkmarks and strikethroughs appear instantly without particles.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

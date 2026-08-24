@@ -76,6 +76,7 @@ private struct CompletionStrikethrough: View {
     let nsFont: NSFont
     let color: Color
     let isVisible: Bool
+    let animationsEnabled: Bool
 
     private var decoratedText: some View {
         Text(text)
@@ -102,7 +103,12 @@ private struct CompletionStrikethrough: View {
 
     @ViewBuilder
     var body: some View {
-        if reduceMotion {
+        if !animationsEnabled {
+            decoratedText
+                .opacity(isVisible ? 1 : 0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else if reduceMotion {
             decoratedText
                 .opacity(isVisible ? 1 : 0)
                 .animation(CompletionMotion.feedback, value: isVisible)
@@ -166,6 +172,7 @@ private struct CompletionParticleBurst: View {
     let isChecked: Bool
     let paperColor: Color
     let inkColor: Color
+    let animationsEnabled: Bool
 
     @State private var burst: Burst?
 
@@ -256,7 +263,7 @@ private struct CompletionParticleBurst: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .onChange(of: isChecked) { wasChecked, isChecked in
-            if !wasChecked, isChecked, !reduceMotion {
+            if !wasChecked, isChecked, animationsEnabled, !reduceMotion {
                 burst = Burst()
             } else if !isChecked || reduceMotion {
                 burst = nil
@@ -264,6 +271,11 @@ private struct CompletionParticleBurst: View {
         }
         .onChange(of: reduceMotion) { _, shouldReduce in
             if shouldReduce {
+                burst = nil
+            }
+        }
+        .onChange(of: animationsEnabled) { _, isEnabled in
+            if !isEnabled {
                 burst = nil
             }
         }
@@ -351,6 +363,9 @@ struct StickyRootView: View {
     private let corner: CGFloat = 4
     private let contentInset: CGFloat = 24
     private var color: StickyColor { model.color }
+    private var completionAnimationsEnabled: Bool {
+        AppSettings.shared.completionAnimationsEnabled
+    }
 
     init(model: StickyModel, controller: StickyController) {
         self.model = model
@@ -459,6 +474,11 @@ struct StickyRootView: View {
         }
         .onChange(of: accessibilityReduceMotion) { _, reduceMotion in
             reduceMotionEnabled = reduceMotion
+        }
+        .onChange(of: completionAnimationsEnabled) { _, isEnabled in
+            if !isEnabled {
+                cancelCompletionExitTasks()
+            }
         }
         .onChange(of: focusedID) { _, new in model.focusedItemID = new }
         .onChange(of: titleFocused) { _, new in model.isTitleFocused = new }
@@ -767,7 +787,8 @@ struct StickyRootView: View {
                             font: bodyFont(14),
                             nsFont: bodyNSFont(14),
                             color: color.inkSecondary,
-                            isVisible: item.isDone
+                            isVisible: item.isDone,
+                            animationsEnabled: completionAnimationsEnabled
                         )
                     }
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
@@ -835,8 +856,17 @@ struct StickyRootView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(color.paper)
                     .opacity(item.isDone ? 1 : 0)
-                    .scaleEffect(accessibilityReduceMotion || item.isDone ? 1 : 0.92)
-                    .animation(CompletionMotion.feedback, value: item.isDone)
+                    .scaleEffect(
+                        accessibilityReduceMotion || !completionAnimationsEnabled || item.isDone
+                            ? 1
+                            : 0.92
+                    )
+                    .animation(
+                        completionAnimationsEnabled && !accessibilityReduceMotion
+                            ? CompletionMotion.feedback
+                            : nil,
+                        value: item.isDone
+                    )
             }
             .frame(width: 13, height: 13)
             // Keep press/hover feedback on the checkbox itself so it neither
@@ -846,7 +876,8 @@ struct StickyRootView: View {
                 CompletionParticleBurst(
                     isChecked: item.isDone,
                     paperColor: color.paper,
-                    inkColor: color.ink
+                    inkColor: color.ink,
+                    animationsEnabled: completionAnimationsEnabled
                 )
                 .frame(width: 46, height: 46)
                 .id(item.id)
@@ -1033,9 +1064,16 @@ struct StickyRootView: View {
 
         retainedCompletionIDs.insert(id)
         let generation = UUID()
-        let retentionMilliseconds = reduceMotionEnabled
-            ? Int64(120)
-            : CompletionMotion.strikeMilliseconds(for: completionLineCounts[id] ?? 1)
+        let retentionMilliseconds: Int64
+        if !completionAnimationsEnabled {
+            retentionMilliseconds = 0
+        } else if reduceMotionEnabled {
+            retentionMilliseconds = 120
+        } else {
+            retentionMilliseconds = CompletionMotion.strikeMilliseconds(
+                for: completionLineCounts[id] ?? 1
+            )
+        }
         completionExitGenerations[id] = generation
         completionExitTasks[id] = Task { @MainActor in
             do {
@@ -1052,7 +1090,7 @@ struct StickyRootView: View {
                 return
             }
 
-            if reduceMotionEnabled {
+            if reduceMotionEnabled || !completionAnimationsEnabled {
                 retainedCompletionIDs.remove(id)
             } else {
                 withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.28)) {

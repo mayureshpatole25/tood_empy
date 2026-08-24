@@ -5,7 +5,6 @@ import CoreText
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var manager: StickyManager!
-    private var journal: JournalStore!
     private var statusMenu: StatusMenuController!
 
     private var homeWindow: HostedWindowController<HomeView>?
@@ -32,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         registerBundledFonts()
         manager = StickyManager()
-        journal = JournalStore()
         manager.onOpenHome = { [weak self] in self?.showHome() }
         statusMenu = StatusMenuController(manager: manager, appDelegate: self)
         manager.restoreAll()
@@ -119,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 size: NSSize(width: 900, height: 640),
                 minimumSize: HomeView.minimumSize,
                 hidesTitleBar: true,
-                content: HomeView(manager: manager, journal: journal)
+                content: HomeView(manager: manager)
             )
         }
         homeWindow?.present()

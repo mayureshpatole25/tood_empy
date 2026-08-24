@@ -17,15 +17,14 @@ enum DeskCardMetrics {
 /// action bottom-right. No chrome at all — settings lives in the status-bar
 /// menu set up during onboarding.
 ///
-/// Reads directly off `StickyManager`/`JournalStore` (the same source of
-/// truth the floating stickies and journal itself use), so it updates live.
+/// Reads directly off `StickyManager`, the same source of truth the floating
+/// stickies use, so it updates live.
 struct HomeView: View {
     // The fixed card fan, focus control, greeting, actions, and a two-line
     // announcement all fit without compression at this content size.
     static let minimumSize = CGSize(width: 720, height: 600)
 
     let manager: StickyManager
-    let journal: JournalStore
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var locationLabel: String?
@@ -185,7 +184,7 @@ struct HomeView: View {
 
     /// Quiet, always-there — finished stickies you archived (instead of
     /// deleted) from the close confirmation live here. Floats in the
-    /// bottom-left corner, mirroring the journal button's bottom-right spot.
+    /// bottom-left corner, opposite the new-list action.
     private func archiveButton(scrollProxy: ScrollViewProxy) -> some View {
         Button {
             let revealArchive = {

@@ -99,10 +99,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         positionItem.submenu = startCornerMenu()
         menu.addItem(positionItem)
 
-        let focusItem = NSMenuItem(title: "Focus Sound", action: nil, keyEquivalent: "")
-        focusItem.submenu = focusSoundMenu()
-        menu.addItem(focusItem)
-
         menu.addItem(.separator())
         let archiveInfo = NSMenuItem(title: "Archived Stickies: \(manager.archivedStickies.count)",
                                      action: nil, keyEquivalent: "")
@@ -261,35 +257,6 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func setStartCorner(_ sender: NSMenuItem) {
         guard let corner = sender.representedObject as? StickyCorner else { return }
         StickyCorner.startCorner = corner
-    }
-
-    /// Ambient focus sound, synthesized live (see `FocusSoundPlayer`) —
-    /// "Off" plus each `FocusSound`, checkmarked on whichever is playing.
-    private func focusSoundMenu() -> NSMenu {
-        let submenu = NSMenu()
-        let current = FocusSoundPlayer.shared.currentSound
-
-        let offItem = NSMenuItem(title: "Off", action: #selector(setFocusSoundOff), keyEquivalent: "")
-        offItem.target = self
-        offItem.state = current == nil ? .on : .off
-        submenu.addItem(offItem)
-        submenu.addItem(.separator())
-
-        for sound in FocusSound.allCases {
-            let item = NSMenuItem(title: sound.displayName, action: #selector(setFocusSound(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = sound
-            item.state = sound == current ? .on : .off
-            submenu.addItem(item)
-        }
-        return submenu
-    }
-
-    @objc private func setFocusSoundOff() { FocusSoundPlayer.shared.stop() }
-
-    @objc private func setFocusSound(_ sender: NSMenuItem) {
-        guard let sound = sender.representedObject as? FocusSound else { return }
-        FocusSoundPlayer.shared.play(sound)
     }
 
     /// The frog glyph — same outline mark as the app/dock icon — drawn as a
