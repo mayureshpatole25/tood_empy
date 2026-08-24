@@ -732,13 +732,13 @@ struct StickyRootView: View {
             let newID = model.addItem()
             focusItem(newID, atUTF16Offset: 0)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: 7) {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(color.ink.opacity(inkOpacity))
                     .frame(width: 13, height: 24)
                     .frame(width: 24, alignment: .leading)
-                Text("Add item")
+                Text("Add to-do")
                     .font(bodyFont(14))
                     .foregroundStyle(color.ink.opacity(inkOpacity))
                 Spacer(minLength: 0)
