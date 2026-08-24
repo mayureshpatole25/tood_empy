@@ -21,7 +21,6 @@ final class StickyManager {
     private(set) var archivedStickies: [ArchivedSticky] = []
 
     @ObservationIgnored private let persistence = PersistenceService()
-    let archive = ArchiveService()
     let stickyArchive = StickyArchiveService()
     @ObservationIgnored private var rollover: RolloverScheduler?
 
@@ -338,40 +337,36 @@ final class StickyManager {
         }
     }
 
-    /// Checked-off today — counts both still-live done items (not yet swept
-    /// into the archive by tonight's rollover) and anything already archived
-    /// today, so the number is right whichever side of rollover you're on.
+    /// Checked-off today across live and whole-sticky archived items.
     var tasksCompletedToday: Int {
         let cal = Calendar.current
-        let liveToday = order.reduce(into: 0) { count, id in
-            count += controllers[id]?.model.items.filter {
-                $0.isDone && $0.completedAt.map { cal.isDateInToday($0) } == true
-            }.count ?? 0
-        }
-        let archivedToday = archive.load().filter {
-            $0.completedAt.map { cal.isDateInToday($0) } == true
-        }.count
-        return liveToday + archivedToday
+        return completedItemsDisplay().lazy.filter { cal.isDateInToday($0.completedAt) }.count
     }
 
-    /// Today's completed items with their sticky's color, for the Home
-    /// insight card — same "live + archived" merge as `tasksCompletedToday`,
-    /// just returning the items themselves instead of a count.
-    func completedTodayDisplay() -> [CompletedTaskDisplay] {
-        let cal = Calendar.current
+    /// Every retained completion with its sticky color. Whole-sticky archive
+    /// entries are included because archiving a sticky should not erase its
+    /// contribution to insights.
+    func completedItemsDisplay() -> [CompletedTaskDisplay] {
         var result: [CompletedTaskDisplay] = []
         for id in order {
             guard let model = controllers[id]?.model else { continue }
             for item in model.items where item.isDone && !item.text.isEmpty {
-                guard let completedAt = item.completedAt, cal.isDateInToday(completedAt) else { continue }
+                guard let completedAt = item.completedAt else { continue }
                 result.append(CompletedTaskDisplay(id: item.id, text: item.text, color: model.color, completedAt: completedAt))
             }
         }
-        for archived in archive.load() {
-            guard let completedAt = archived.completedAt, cal.isDateInToday(completedAt) else { continue }
-            result.append(CompletedTaskDisplay(id: archived.id, text: archived.text, color: archived.stickyColor ?? .pink, completedAt: completedAt))
+        for sticky in archivedStickies {
+            for item in sticky.data.items where item.isDone && !item.text.isEmpty {
+                guard let completedAt = item.completedAt else { continue }
+                result.append(CompletedTaskDisplay(id: item.id, text: item.text, color: sticky.data.colorID, completedAt: completedAt))
+            }
         }
         return result.sorted { $0.completedAt < $1.completedAt }
+    }
+
+    func completedTodayDisplay() -> [CompletedTaskDisplay] {
+        let cal = Calendar.current
+        return completedItemsDisplay().filter { cal.isDateInToday($0.completedAt) }
     }
 
     /// A handful of currently open (unchecked, non-empty) items across every
@@ -410,24 +405,14 @@ final class StickyManager {
 
     // MARK: - Rollover
 
-    /// Move completed items into the archive; keep unfinished; advance the day.
+    /// Advance the sticky day without removing its completed items. Their
+    /// completion timestamps are the source of truth for visibility and stats.
     private func performRollover() {
-        var archived: [ArchivedItem] = []
         let now = Date()
         for id in order {
             guard let model = controllers[id]?.model else { continue }
-            let done = model.items.filter { $0.isDone }
-            for item in done where !item.text.isEmpty {
-                archived.append(ArchivedItem(
-                    id: item.id, text: item.text,
-                    stickyID: model.id, stickyTitle: model.title,
-                    completedAt: item.completedAt, archivedOn: now,
-                    stickyColor: model.color))
-            }
-            model.items.removeAll { $0.isDone }
             model.day = now
         }
-        archive.append(archived)
         saveNow()
     }
 
