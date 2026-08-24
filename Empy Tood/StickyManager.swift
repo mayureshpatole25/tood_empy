@@ -88,6 +88,20 @@ final class StickyManager {
         scheduleSave()
     }
 
+    /// Creates a titled sticky for command-palette workflows. The caller
+    /// decides when to reveal it so the palette can close before focus moves.
+    @discardableResult
+    func createNamedSticky(_ rawTitle: String) -> UUID? {
+        let title = rawTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return nil }
+        let model = StickyModel.makeNew(at: cascadeOrigin(), color: .nextNewStickyColor())
+        model.title = title
+        model.isVisible = false
+        addController(for: model)
+        saveNow()
+        return model.id
+    }
+
     func remove(_ id: UUID) {
         controllers[id]?.panel.orderOut(nil)
         controllers[id]?.panel.close()
@@ -272,6 +286,47 @@ final class StickyManager {
             let label = title.isEmpty ? "To Do" : title
             return (String(label.prefix(30)), id)
         }
+    }
+
+    /// Quick capture also needs the paper colour so assignment feedback can
+    /// visually connect the capture panel to its destination sticky.
+    func quickCaptureDestinations() -> [QuickCaptureDestination] {
+        order.compactMap { id in
+            guard let model = controllers[id]?.model else { return nil }
+            let title = model.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return QuickCaptureDestination(
+                id: id,
+                title: String((title.isEmpty ? "To Do" : title).prefix(30)),
+                color: model.color
+            )
+        }
+    }
+
+    /// Stores a task from the global quick-capture panel without revealing or
+    /// focusing its destination sticky. A newly created destination starts
+    /// hidden so capture never interrupts the app the user was working in.
+    @discardableResult
+    func captureItem(_ rawText: String, in stickyID: UUID?, newStickyTitle: String?) -> UUID? {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+
+        if let stickyID, let model = controllers[stickyID]?.model {
+            model.addCapturedItem(text)
+            saveNow()
+            return stickyID
+        }
+
+        let title = newStickyTitle?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let title, !title.isEmpty else { return nil }
+
+        let model = StickyModel.makeNew(at: cascadeOrigin(), color: .nextNewStickyColor())
+        model.title = title
+        model.items = [TodoItem(text: text)]
+        model.isVisible = false
+        addController(for: model)
+        saveNow()
+        return model.id
     }
 
     // MARK: - Dashboard stats

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Maps the first ten stickies to the compact Control-number row used by
-/// both the status menu and app-local keyboard handling. As is conventional
+/// both the status menu and system-wide keyboard handling. As is conventional
 /// for ten numbered slots on a keyboard, the tenth slot uses zero.
 enum StickySelectionShortcut {
     static let maximumStickyCount = 10

@@ -21,6 +21,7 @@ struct KeyCombo: Equatable, Codable {
 
     static let defaultShowSticky = KeyCombo(keyCode: UInt32(kVK_ANSI_S), modifiers: UInt32(cmdKey | controlKey))
     static let defaultNewSticky = KeyCombo(keyCode: UInt32(kVK_ANSI_N), modifiers: UInt32(cmdKey | controlKey))
+    static let defaultQuickCapture = KeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(controlKey))
 
     // MARK: - Codable (stored as a single string in UserDefaults)
 
