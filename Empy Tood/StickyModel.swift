@@ -65,6 +65,9 @@ final class StickyModel: Identifiable {
     /// Toggles whether completed rows are visible in this sticky. Bridged to
     /// the view so the AppKit key monitor can handle Command-S reliably.
     @ObservationIgnored var onToggleDoneVisibility: (() -> Void)?
+    @ObservationIgnored var onToggleTimer: (() -> Void)?
+    @ObservationIgnored var onEditTimer: (() -> Void)?
+    @ObservationIgnored var onStopTimer: (() -> Void)?
     /// Moves the caret to the start of the title (-1) or the end of the
     /// final visible checklist item (+1) for Command-Up/Command-Down.
     @ObservationIgnored var onMoveCaretToDocumentBoundary: ((Int) -> Void)?
@@ -119,7 +122,7 @@ final class StickyModel: Identifiable {
 
     @discardableResult
     func addItem(after item: TodoItem? = nil) -> UUID {
-        let new = TodoItem()
+        let new = TodoItem(indentLevel: item?.indentLevel ?? 0)
         if let item, let idx = items.firstIndex(where: { $0.id == item.id }) {
             items.insert(new, at: idx + 1)
         } else {
@@ -141,11 +144,14 @@ final class StickyModel: Identifiable {
         let new: TodoItem
 
         if split == 0 {
-            new = TodoItem()
+            new = TodoItem(indentLevel: items[idx].indentLevel)
             items.insert(new, at: idx)
         } else {
             items[idx].text = text.substring(to: split)
-            new = TodoItem(text: text.substring(from: split))
+            new = TodoItem(
+                text: text.substring(from: split),
+                indentLevel: items[idx].indentLevel
+            )
             items.insert(new, at: idx + 1)
         }
 
@@ -172,6 +178,14 @@ final class StickyModel: Identifiable {
     func setText(_ id: UUID, _ text: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].text = text
+        onChange?()
+    }
+
+    func setIndentLevel(_ id: UUID, to level: Int) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        let previousLevel = items[idx].indentLevel
+        items[idx].indentLevel = min(max(level, 0), TodoItem.maximumIndentLevel)
+        guard items[idx].indentLevel != previousLevel else { return }
         onChange?()
     }
 
@@ -204,7 +218,7 @@ final class StickyModel: Identifiable {
         }
         var lastID: UUID?
         for line in remaining {
-            let newItem = TodoItem(text: line)
+            let newItem = TodoItem(text: line, indentLevel: items[idx].indentLevel)
             items.insert(newItem, at: insertAt)
             insertAt += 1
             lastID = newItem.id
