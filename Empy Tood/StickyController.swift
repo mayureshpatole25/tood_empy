@@ -154,8 +154,26 @@ final class StickyController: NSObject, NSWindowDelegate {
                 self.model.onToggleDoneVisibility?()
                 return nil
             }
+            if pressedKey == "p", commandModifiers == .command {
+                self.model.onToggleTimer?()
+                return nil
+            }
+            if pressedKey == "p", commandModifiers == [.command, .shift] {
+                self.model.onEditTimer?()
+                return nil
+            }
+            if pressedKey == "p", commandModifiers == [.command, .option] {
+                self.model.onStopTimer?()
+                return nil
+            }
             if pressedKey == "d", commandModifiers == .command {
                 self.requestClose() // asks Archive/Delete/Cancel, same as the archive button
+                return nil
+            }
+            if event.keyCode == 48,
+               commandModifiers.isSubset(of: .shift),
+               let focusedID = self.model.focusedItemID {
+                self.adjustIndent(focusedID, by: commandModifiers.contains(.shift) ? -1 : 1)
                 return nil
             }
             if pressedKey == "v", commandModifiers == .command,
@@ -334,6 +352,13 @@ final class StickyController: NSObject, NSWindowDelegate {
             let length = (editor.string as NSString).length
             editor.setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
         }
+    }
+
+    func currentCaretUTF16Offset() -> Int? {
+        guard let editor = panel.firstResponder as? NSTextView,
+              editor.selectedRange().length == 0
+        else { return nil }
+        return editor.selectedRange().location
     }
 
     /// Places the caret on the first/last visual line of the next field at
@@ -546,6 +571,29 @@ final class StickyController: NSObject, NSWindowDelegate {
         guard let item = model.items.first(where: { $0.id == id }) else { return }
         let isDone = !item.isDone
         setDone(id, isDone: isDone, completedAt: isDone ? Date() : nil)
+    }
+
+    func adjustIndent(_ id: UUID, by change: Int) {
+        guard let item = model.items.first(where: { $0.id == id }) else { return }
+        let destination = min(
+            max(item.indentLevel + change, 0),
+            TodoItem.maximumIndentLevel
+        )
+        guard destination != item.indentLevel else { return }
+        setIndentLevel(id, to: destination)
+    }
+
+    private func setIndentLevel(_ id: UUID, to level: Int) {
+        guard let item = model.items.first(where: { $0.id == id }),
+              item.indentLevel != level
+        else { return }
+        let priorLevel = item.indentLevel
+
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.setIndentLevel(id, to: priorLevel)
+        }
+        completionUndoManager.setActionName(level > priorLevel ? "Indent Task" : "Outdent Task")
+        model.setIndentLevel(id, to: level)
     }
 
     private func setDone(_ id: UUID, isDone: Bool, completedAt: Date?) {

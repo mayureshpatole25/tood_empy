@@ -1,6 +1,14 @@
 import Foundation
 import Observation
 
+enum TimerCompletionSound: String, CaseIterable, Identifiable {
+    case glass, ping, pop, tink, none
+
+    var id: String { rawValue }
+    var displayName: String { rawValue.capitalized }
+    var systemSoundName: String? { self == .none ? nil : displayName }
+}
+
 /// Settings not already owned by `StickyColor`/`StickyFont`/`StickyCorner`
 /// (which keep their own UserDefaults-backed statics — reused as-is here,
 /// not duplicated) — onboarding completion, launch at login, and the two
@@ -32,6 +40,20 @@ final class AppSettings {
                 forKey: Keys.completionAnimationsEnabled
             )
         }
+    }
+
+    /// Starting duration for every newly opened sticky timer. Individual
+    /// timers remain intentionally ephemeral and reset to this value when
+    /// their sticky closes.
+    var defaultTimerSeconds: Int {
+        didSet {
+            defaultTimerSeconds = min(max(defaultTimerSeconds, 1), 359_999)
+            UserDefaults.standard.set(defaultTimerSeconds, forKey: Keys.defaultTimerSeconds)
+        }
+    }
+
+    var timerCompletionSound: TimerCompletionSound {
+        didSet { UserDefaults.standard.set(timerCompletionSound.rawValue, forKey: Keys.timerCompletionSound) }
     }
 
     var showStickyShortcut: KeyCombo {
@@ -82,6 +104,9 @@ final class AppSettings {
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
         launchAtLogin = d.bool(forKey: Keys.launchAtLogin)
         completionAnimationsEnabled = d.object(forKey: Keys.completionAnimationsEnabled) as? Bool ?? true
+        defaultTimerSeconds = min(max(d.object(forKey: Keys.defaultTimerSeconds) as? Int ?? 300, 1), 359_999)
+        timerCompletionSound = d.string(forKey: Keys.timerCompletionSound)
+            .flatMap(TimerCompletionSound.init(rawValue:)) ?? .glass
         showStickyShortcut = d.string(forKey: Keys.showShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultShowSticky
         newStickyShortcut = d.string(forKey: Keys.newShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultNewSticky
         quickCaptureShortcut = d.string(forKey: Keys.quickCaptureShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultQuickCapture
@@ -96,6 +121,8 @@ final class AppSettings {
         static let onboardingCompleted = "today.onboardingCompleted"
         static let launchAtLogin = "today.launchAtLogin"
         static let completionAnimationsEnabled = "today.completionAnimationsEnabled"
+        static let defaultTimerSeconds = "today.defaultTimerSeconds"
+        static let timerCompletionSound = "today.timerCompletionSound"
         static let showShortcut = "today.showStickyShortcut"
         static let newShortcut = "today.newStickyShortcut"
         static let quickCaptureShortcut = "today.quickCaptureShortcut"

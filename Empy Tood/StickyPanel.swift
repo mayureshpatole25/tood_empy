@@ -103,12 +103,16 @@ final class StickyPanel: NSWindow {
             : contentView.bounds.maxY - point.y
         guard distanceFromTop <= windowDragRegionDepth else { return false }
 
-        // Keep the close/minimize controls interactive inside the otherwise
-        // draggable header. Their visual centers live 24pt from the top and
-        // start at the shared 24pt content inset.
+        // Keep controls interactive inside the otherwise draggable header.
+        // Their visual positions are deliberately mirrored here because the
+        // drag begins at AppKit's event layer, before SwiftUI can hit-test a
+        // Button or TextField. Without excluding the timer, its hover state
+        // appears correctly but every click is consumed as a window drag.
         let isOverTrafficLights = (20...72).contains(point.x)
             && (16...44).contains(distanceFromTop)
-        return !isOverTrafficLights
+        let isOverTimer = point.x >= contentView.bounds.maxX - 120
+            && (36...84).contains(distanceFromTop)
+        return !isOverTrafficLights && !isOverTimer
     }
 
 }

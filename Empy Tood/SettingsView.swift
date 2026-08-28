@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Every persisted preference in one place — the default-color/font/position
@@ -18,6 +19,7 @@ struct SettingsView: View {
     @State private var corner: StickyCorner = StickyCorner.startCorner
     @State private var showColorPicker = false
     @State private var showFontPicker = false
+    @State private var timerDefaultText = ""
     @Bindable var settings: AppSettings
 
     var body: some View {
@@ -30,6 +32,27 @@ struct SettingsView: View {
             Section("Animations") {
                 Toggle("Animate completed items", isOn: $settings.completionAnimationsEnabled)
                 Text("When off, checkmarks and strikethroughs appear instantly without particles.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Timer") {
+                LabeledContent("Default Duration") {
+                    TextField("5:00", text: $timerDefaultText)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 72)
+                        .onSubmit { commitTimerDefault() }
+                }
+                Picker("Completion Sound", selection: $settings.timerCompletionSound) {
+                    ForEach(TimerCompletionSound.allCases) { sound in
+                        Text(sound.displayName).tag(sound)
+                    }
+                }
+                .onChange(of: settings.timerCompletionSound) { _, sound in
+                    guard let name = sound.systemSoundName else { return }
+                    NSSound(named: NSSound.Name(name))?.play()
+                }
+                Text("Use minutes or MM:SS. Each sticky resets to this duration when closed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -71,6 +94,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 480)
+        .onAppear { timerDefaultText = Self.formatDuration(settings.defaultTimerSeconds) }
+        .onChange(of: settings.defaultTimerSeconds) { _, seconds in
+            timerDefaultText = Self.formatDuration(seconds)
+        }
     }
 
     // MARK: - Color
@@ -166,6 +193,26 @@ struct SettingsView: View {
 
     private var placeholderName: String {
         NSFullUserName().split(separator: " ").first.map(String.init) ?? NSFullUserName()
+    }
+
+    private func commitTimerDefault() {
+        if let seconds = Self.parseDuration(timerDefaultText) {
+            settings.defaultTimerSeconds = seconds
+        }
+        timerDefaultText = Self.formatDuration(settings.defaultTimerSeconds)
+    }
+
+    private static func parseDuration(_ value: String) -> Int? {
+        let parts = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":")
+        guard (1...2).contains(parts.count), parts.allSatisfy({ Int($0) != nil }) else { return nil }
+        let seconds = parts.count == 1
+            ? (Int(parts[0]) ?? 0) * 60
+            : (Int(parts[0]) ?? 0) * 60 + (Int(parts[1]) ?? 0)
+        return seconds > 0 ? min(seconds, 359_999) : nil
+    }
+
+    private static func formatDuration(_ seconds: Int) -> String {
+        "\(seconds / 60):\(String(format: "%02d", seconds % 60))"
     }
 
 }

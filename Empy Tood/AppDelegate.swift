@@ -1,9 +1,10 @@
 import AppKit
 import SwiftUI
 import CoreText
+import UserNotifications
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private var manager: StickyManager!
     private var statusMenu: StatusMenuController!
 
@@ -29,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // on a light background. Forcing light appearance for the whole app
         // keeps it looking the same regardless of the system setting.
         NSApp.appearance = NSAppearance(named: .aqua)
+        UNUserNotificationCenter.current().delegate = self
 
         registerBundledFonts()
         manager = StickyManager()
@@ -105,6 +107,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         manager.saveNow()
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner])
     }
 
     deinit {

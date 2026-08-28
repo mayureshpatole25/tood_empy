@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+@preconcurrency import UserNotifications
 
 private struct ChecklistRowFramePreferenceKey: PreferenceKey {
     static var defaultValue: [UUID: CGRect] = [:]
@@ -19,6 +20,316 @@ private struct CompletionLineCountPreferenceKey: PreferenceKey {
 
 private enum HoverMotion {
     static let feedback = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.14)
+}
+
+private enum StickyTimerMotion {
+    static let stateChange = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.16)
+}
+
+/// A solid remaining-time indicator that empties anticlockwise from twelve
+/// o'clock, giving the timer a quiet pie-chart appearance.
+private struct StickyTimerPie: Shape {
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let amount = max(0, min(progress, 1))
+        guard amount < 0.9999 else { return Path(ellipseIn: rect) }
+        guard amount > 0 else { return Path() }
+
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        var path = Path()
+        path.move(to: center)
+        path.addLine(to: CGPoint(x: center.x, y: center.y - radius))
+        path.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(-90),
+            endAngle: .degrees(-90 + (360 * amount)),
+            clockwise: false
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+@MainActor
+private enum StickyTimerCompletion {
+    static func schedule(
+        identifier: String,
+        after seconds: Double,
+        stickyTitle: String,
+        playsSound: Bool
+    ) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+
+        let addRequest = {
+            let content = UNMutableNotificationContent()
+            content.title = "Timer complete"
+            content.body = stickyTitle.isEmpty
+                ? "Your sticky timer is finished."
+                : "\(stickyTitle) is ready."
+            content.sound = playsSound ? .default : nil
+            let trigger = UNTimeIntervalNotificationTrigger(
+                timeInterval: max(seconds, 1),
+                repeats: false
+            )
+            center.add(
+                UNNotificationRequest(
+                    identifier: identifier,
+                    content: content,
+                    trigger: trigger
+                )
+            )
+        }
+
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral:
+                addRequest()
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { allowed, _ in
+                    if allowed { addRequest() }
+                }
+            case .denied:
+                break
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    static func cancel(identifier: String) {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [identifier])
+    }
+
+    static func playSelectedCompletionSound() {
+        guard let name = AppSettings.shared.timerCompletionSound.systemSoundName else { return }
+        NSSound(named: NSSound.Name(name))?.play()
+    }
+}
+
+private struct StickyTimerControl: View {
+    let model: StickyModel
+    let defaultSeconds: Int
+    let ink: Color
+    let font: Font
+    let reveal: () -> Void
+    let prepareForEditing: () -> Void
+    let restoreAfterEditing: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @FocusState private var editingTime: Bool
+    @State private var isNearby = false
+    @State private var isHoveringRing = false
+    @State private var isRunning = false
+    @State private var hasStarted = false
+    @State private var totalSeconds: Double
+    @State private var remainingSeconds: Double
+    @State private var endDate: Date?
+    @State private var timeText: String
+
+    private let ticker = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+
+    init(
+        model: StickyModel,
+        defaultSeconds: Int,
+        ink: Color,
+        font: Font,
+        reveal: @escaping () -> Void,
+        prepareForEditing: @escaping () -> Void,
+        restoreAfterEditing: @escaping () -> Void
+    ) {
+        self.model = model
+        self.defaultSeconds = max(defaultSeconds, 1)
+        self.ink = ink
+        self.font = font
+        self.reveal = reveal
+        self.prepareForEditing = prepareForEditing
+        self.restoreAfterEditing = restoreAfterEditing
+        _totalSeconds = State(initialValue: Double(max(defaultSeconds, 1)))
+        _remainingSeconds = State(initialValue: Double(max(defaultSeconds, 1)))
+        _timeText = State(initialValue: Self.format(Double(max(defaultSeconds, 1))))
+    }
+
+    var body: some View {
+        HStack(spacing: 9) {
+            TextField("5:00", text: $timeText)
+                .textFieldStyle(.plain)
+                .font(font)
+                .foregroundStyle(ink.opacity(0.3))
+                .multilineTextAlignment(.trailing)
+                .frame(width: 48)
+                .focused($editingTime)
+                .onSubmit { submitEditedTime() }
+
+            Button(action: toggleTimer) {
+                ZStack {
+                    if hasStarted {
+                        Circle()
+                            .fill(ink.opacity(isHoveringRing ? 0.025 : 0.08))
+                        StickyTimerPie(
+                            progress: remainingSeconds / max(totalSeconds, 1)
+                        )
+                        .fill(ink.opacity(isHoveringRing ? 0.08 : 0.48))
+                    }
+                    Image(systemName: buttonSymbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ink.opacity(0.52))
+                        .opacity(!hasStarted || isHoveringRing || !isRunning ? 1 : 0)
+                }
+                .frame(width: 24, height: 24)
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHoveringRing = $0 }
+            .accessibilityLabel(isRunning ? "Pause timer" : "Start timer")
+            .help(isRunning ? "Pause timer (⌘P)" : "Start timer (⌘P)")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .contentShape(Rectangle())
+        .onHover { isNearby = $0 }
+        .animation(reduceMotion ? nil : StickyTimerMotion.stateChange, value: isNearby)
+        .animation(reduceMotion ? nil : StickyTimerMotion.stateChange, value: hasStarted)
+        .animation(reduceMotion ? nil : StickyTimerMotion.stateChange, value: isHoveringRing)
+        .onReceive(ticker) { now in tick(now) }
+        .onChange(of: editingTime) { wasEditing, isEditing in
+            if wasEditing, !isEditing { commitEditedTime() }
+        }
+        .onChange(of: defaultSeconds) { _, newValue in
+            guard !hasStarted, !editingTime else { return }
+            reset(to: newValue)
+        }
+        .onAppear {
+            model.onToggleTimer = { toggleTimer() }
+            model.onEditTimer = { focusTimeEditor() }
+            model.onStopTimer = { stopTimer() }
+        }
+        .onDisappear {
+            model.onToggleTimer = nil
+            model.onEditTimer = nil
+            model.onStopTimer = nil
+            reset(to: defaultSeconds)
+        }
+    }
+
+    private var notificationIdentifier: String {
+        "sticky-timer-\(model.id.uuidString)"
+    }
+
+    private var buttonSymbol: String {
+        isRunning ? (isHoveringRing ? "pause.fill" : "") : "play.fill"
+    }
+
+    private func toggleTimer() {
+        reveal()
+        if isRunning {
+            tick(Date())
+            isRunning = false
+            endDate = nil
+            StickyTimerCompletion.cancel(identifier: notificationIdentifier)
+        } else {
+            startTimer()
+        }
+    }
+
+    private func startTimer() {
+        if remainingSeconds <= 0 { remainingSeconds = totalSeconds }
+        hasStarted = true
+        isRunning = true
+        endDate = Date().addingTimeInterval(remainingSeconds)
+        StickyTimerCompletion.schedule(
+            identifier: notificationIdentifier,
+            after: remainingSeconds,
+            stickyTitle: model.title,
+            playsSound: AppSettings.shared.timerCompletionSound != .none
+        )
+    }
+
+    private func tick(_ now: Date) {
+        guard isRunning, let endDate else { return }
+        remainingSeconds = max(0, endDate.timeIntervalSince(now))
+        if !editingTime { timeText = Self.format(remainingSeconds) }
+        guard remainingSeconds <= 0 else { return }
+        isRunning = false
+        self.endDate = nil
+        StickyTimerCompletion.playSelectedCompletionSound()
+    }
+
+    private func commitEditedTime() {
+        guard let seconds = Self.parse(timeText) else {
+            timeText = Self.format(remainingSeconds)
+            return
+        }
+        totalSeconds = seconds
+        remainingSeconds = seconds
+        hasStarted = hasStarted || isRunning
+        if isRunning {
+            endDate = Date().addingTimeInterval(seconds)
+            StickyTimerCompletion.schedule(
+                identifier: notificationIdentifier,
+                after: seconds,
+                stickyTitle: model.title,
+                playsSound: AppSettings.shared.timerCompletionSound != .none
+            )
+        }
+        timeText = Self.format(seconds)
+    }
+
+    private func submitEditedTime() {
+        commitEditedTime()
+        if !isRunning { startTimer() }
+        editingTime = false
+        DispatchQueue.main.async { restoreAfterEditing() }
+    }
+
+    private func stopTimer() {
+        StickyTimerCompletion.cancel(identifier: notificationIdentifier)
+        editingTime = false
+        reset(to: defaultSeconds)
+        isNearby = false
+    }
+
+    private func focusTimeEditor() {
+        reveal()
+        prepareForEditing()
+        isNearby = true
+        editingTime = true
+        DispatchQueue.main.async {
+            (NSApp.keyWindow?.firstResponder as? NSTextView)?.selectAll(nil)
+        }
+    }
+
+    private func reset(to seconds: Int) {
+        let value = Double(max(seconds, 1))
+        isRunning = false
+        hasStarted = false
+        endDate = nil
+        totalSeconds = value
+        remainingSeconds = value
+        timeText = Self.format(value)
+    }
+
+    private static func parse(_ value: String) -> Double? {
+        let parts = value.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ":")
+        guard (1...2).contains(parts.count), parts.allSatisfy({ Double($0) != nil }) else { return nil }
+        let seconds = parts.count == 1
+            ? (Double(parts[0]) ?? 0) * 60
+            : (Double(parts[0]) ?? 0) * 60 + (Double(parts[1]) ?? 0)
+        return seconds > 0 ? min(seconds, 359_999) : nil
+    }
+
+    private static func format(_ seconds: Double) -> String {
+        let rounded = max(0, Int(ceil(seconds)))
+        return "\(rounded / 60):\(String(format: "%02d", rounded % 60))"
+    }
 }
 
 private enum DoneItemsFilter: String, CaseIterable, Identifiable {
@@ -346,6 +657,11 @@ private extension View {
     }
 }
 
+private enum TimerReturnFocus {
+    case title(offset: Int)
+    case item(UUID, offset: Int)
+}
+
 /// The visible sticky: flat, edge-to-edge paper with a big two-line "To Do"
 /// title, a date, and an editable checklist. Hosted in a borderless window.
 struct StickyRootView: View {
@@ -358,6 +674,8 @@ struct StickyRootView: View {
     @State private var hovering = false
     @State private var hoveringTopChrome = false
     @State private var showColors = false
+    @State private var showsTimer = true
+    @State private var timerReturnFocus: TimerReturnFocus?
     @State private var showsDoneTasks = false
     @State private var doneItemsFilter: DoneItemsFilter = .allTime
     @State private var retainedCompletionIDs: Set<UUID> = []
@@ -547,9 +865,12 @@ struct StickyRootView: View {
             // which ate into the title's width and made longer titles wrap
             // mid-word or get cut off. Up here it costs a line of height
             // instead, and the title gets the sticky's full width.
-            Text(Self.dateFormatter.string(from: model.day))
-                .font(bodyFont(14))
-                .foregroundStyle(color.ink.opacity(0.3))
+            HStack(alignment: .center, spacing: 12) {
+                Text(Self.dateFormatter.string(from: model.day))
+                    .font(bodyFont(14))
+                    .foregroundStyle(color.ink.opacity(0.3))
+                Spacer(minLength: 8)
+            }
 
             // Gives the title an explicit maximum width budget — an
             // unconstrained TextField's ideal width just grows with its
@@ -595,6 +916,29 @@ struct StickyRootView: View {
                 // maximum still gives wrapping a concrete budget without
                 // preventing the native window from becoming narrower again.
                 .frame(minWidth: 0, maxWidth: titleWidth, alignment: .topLeading)
+        }
+        .overlay(alignment: .topTrailing) {
+            StickyTimerControl(
+                model: model,
+                defaultSeconds: AppSettings.shared.defaultTimerSeconds,
+                ink: color.ink,
+                font: bodyFont(14),
+                reveal: { showsTimer = true },
+                prepareForEditing: captureTimerReturnFocus,
+                restoreAfterEditing: restoreFocusAfterTimerEdit
+            )
+            .frame(
+                width: max(140, (availableWidth - contentInset * 2) * 0.42),
+                height: 112,
+                alignment: .topTrailing
+            )
+            .opacity(showsTimer ? 1 : 0)
+            .allowsHitTesting(showsTimer)
+            .accessibilityHidden(!showsTimer)
+            .animation(
+                accessibilityReduceMotion ? nil : StickyTimerMotion.stateChange,
+                value: showsTimer
+            )
         }
     }
 
@@ -806,6 +1150,8 @@ struct StickyRootView: View {
                                 return .handled
                             }
                             .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .layoutPriority(1)
                             .contentShape(Rectangle())
 
                         CompletionStrikethrough(
@@ -821,6 +1167,8 @@ struct StickyRootView: View {
                     .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
                 }
                 .padding(.vertical, 6)
+                .padding(.leading, CGFloat(item.indentLevel) * 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Rectangle()
                     .fill(color.divider)
@@ -1236,6 +1584,14 @@ struct StickyRootView: View {
                         colorPicker
                     }
 
+                Button { showsTimer.toggle() } label: {
+                    Image(systemName: "timer")
+                }
+                .opacity(showsTimer ? 1 : 0.55)
+                .hoverFeedback(scale: 1.1, darkening: -0.05)
+                .accessibilityLabel(showsTimer ? "Hide timer" : "Show timer")
+                .help(showsTimer ? "Hide timer" : "Show timer")
+
                 Button { controller.requestClose() } label: {
                     Image(systemName: "archivebox")
                 }
@@ -1322,6 +1678,32 @@ struct StickyRootView: View {
             }
         } else if index + 1 < ordered.count {
             focusItem(ordered[index + 1].id, atUTF16Offset: 0)
+        }
+    }
+
+    private func captureTimerReturnFocus() {
+        let caret = controller.currentCaretUTF16Offset()
+        if titleFocused || model.isTitleFocused {
+            timerReturnFocus = .title(offset: caret ?? (model.title as NSString).length)
+        } else if let id = focusedID ?? model.focusedItemID,
+                  let item = model.items.first(where: { $0.id == id }) {
+            timerReturnFocus = .item(id, offset: caret ?? (item.text as NSString).length)
+        } else {
+            timerReturnFocus = nil
+        }
+    }
+
+    private func restoreFocusAfterTimerEdit() {
+        let destination = timerReturnFocus
+        timerReturnFocus = nil
+        switch destination {
+        case .title(let offset):
+            focusTitle(atUTF16Offset: offset)
+        case .item(let id, let offset)
+            where displayedItems.contains(where: { $0.id == id }):
+            focusItem(id, atUTF16Offset: offset)
+        default:
+            focusLastItemForTyping()
         }
     }
 
