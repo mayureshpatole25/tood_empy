@@ -1518,8 +1518,6 @@ struct StickyRootView: View {
     // MARK: - Bottom hover toolbar
 
     private func toggleDoneTaskVisibility() {
-        guard doneTaskCount > 0 else { return }
-
         if !showsDoneTasks {
             model.groupDoneItemsAtBottom()
         }
@@ -1542,14 +1540,12 @@ struct StickyRootView: View {
     private var bottomToolbar: some View {
         VStack {
             Spacer()
-            HStack(spacing: 18) {
-                HStack(spacing: 7) {
+            HStack(spacing: 14) {
+                HStack(spacing: 4) {
                     Button { toggleDoneTaskVisibility() } label: {
                         Image(systemName: showsDoneTasks ? "eye" : "eye.slash")
                     }
-                    .disabled(doneTaskCount == 0)
-                    .opacity(doneTaskCount == 0 ? 0.25 : 1)
-                    .hoverFeedback(scale: 1.1, darkening: -0.05, isEnabled: doneTaskCount > 0)
+                    .hoverFeedback(scale: 1.1, darkening: -0.05)
                     .accessibilityLabel(showsDoneTasks ? "Hide done items" : "Show done items")
                     .help(showsDoneTasks ? "Hide done items (⌘S)" : "Show \(doneTaskCount) done items (⌘S)")
 
@@ -1568,7 +1564,7 @@ struct StickyRootView: View {
                     } label: {
                         Image(systemName: "chevron.down")
                             .font(.system(size: 9, weight: .bold))
-                            .frame(width: 28, height: 28)
+                            .frame(width: 12, height: 28)
                             .contentShape(Rectangle())
                     }
                     .disabled(doneTaskCount == 0)
