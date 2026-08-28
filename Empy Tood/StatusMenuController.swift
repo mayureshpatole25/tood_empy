@@ -53,10 +53,12 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Show All", action: #selector(showAll), keyEquivalent: "")
-            .target = self
-        menu.addItem(withTitle: "Hide All", action: #selector(hideAll), keyEquivalent: "")
-            .target = self
+        let showAllItem = menu.addItem(withTitle: "Show All", action: #selector(showAll), keyEquivalent: "s")
+        showAllItem.target = self
+        showAllItem.keyEquivalentModifierMask = [.command, .control, .option]
+        let hideAllItem = menu.addItem(withTitle: "Hide All", action: #selector(hideAll), keyEquivalent: "a")
+        hideAllItem.target = self
+        hideAllItem.keyEquivalentModifierMask = [.command, .control, .option]
         let deleteAll = menu.addItem(withTitle: "Delete All", action: #selector(deleteAll), keyEquivalent: "")
         deleteAll.target = self
         deleteAll.isEnabled = !stickies.isEmpty

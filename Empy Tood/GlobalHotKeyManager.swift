@@ -2,7 +2,7 @@ import Carbon.HIToolbox
 import AppKit
 
 /// Registers the configurable global shortcuts (quick capture, show active
-/// sticky, new sticky) and five fixed arrangement shortcuts using the Carbon Event
+/// sticky, new sticky), show/hide-all commands, and five fixed arrangement shortcuts using the Carbon Event
 /// Manager's hotkey APIs — still the standard
 /// way to get a system-wide shortcut in an AppKit app, works while sandboxed,
 /// and (unlike an `NSEvent` global monitor) needs no Accessibility/Input
@@ -16,6 +16,8 @@ final class GlobalHotKeyManager {
     var onNewSticky: (() -> Void)?
     var onQuickCapture: (() -> Void)?
     var onOpenStickyPicker: (() -> Void)?
+    var onShowAll: (() -> Void)?
+    var onHideAll: (() -> Void)?
     var onArrange: ((StickyArrangement) -> Void)?
     var onSelectSticky: ((Int) -> Void)?
 
@@ -23,6 +25,8 @@ final class GlobalHotKeyManager {
     private var newRef: EventHotKeyRef?
     private var quickCaptureRef: EventHotKeyRef?
     private var openStickyPickerRef: EventHotKeyRef?
+    private var showAllRef: EventHotKeyRef?
+    private var hideAllRef: EventHotKeyRef?
     private var arrangementRefs: [StickyArrangement: EventHotKeyRef] = [:]
     private var stickySelectionRefs: [Int: EventHotKeyRef] = [:]
     private var eventHandlerRef: EventHandlerRef?
@@ -32,6 +36,8 @@ final class GlobalHotKeyManager {
     private let newID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 2)
     private let quickCaptureID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 3)
     private let openStickyPickerID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 4)
+    private let showAllID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 5)
+    private let hideAllID = EventHotKeyID(signature: GlobalHotKeyManager.signature, id: 6)
     private static let arrangementIDBase: UInt32 = 10
     private static let stickySelectionIDBase: UInt32 = 30
 
@@ -51,6 +57,17 @@ final class GlobalHotKeyManager {
             id: openStickyPickerID,
             into: &openStickyPickerRef
         )
+        let visibilityModifiers = UInt32(cmdKey | controlKey | optionKey)
+        register(
+            KeyCombo(keyCode: UInt32(kVK_ANSI_S), modifiers: visibilityModifiers),
+            id: showAllID,
+            into: &showAllRef
+        )
+        register(
+            KeyCombo(keyCode: UInt32(kVK_ANSI_A), modifiers: visibilityModifiers),
+            id: hideAllID,
+            into: &hideAllRef
+        )
         registerArrangementShortcuts()
         registerStickySelectionShortcuts()
     }
@@ -64,10 +81,14 @@ final class GlobalHotKeyManager {
         if let newRef { UnregisterEventHotKey(newRef) }
         if let quickCaptureRef { UnregisterEventHotKey(quickCaptureRef) }
         if let openStickyPickerRef { UnregisterEventHotKey(openStickyPickerRef) }
+        if let showAllRef { UnregisterEventHotKey(showAllRef) }
+        if let hideAllRef { UnregisterEventHotKey(hideAllRef) }
         showRef = nil
         newRef = nil
         quickCaptureRef = nil
         openStickyPickerRef = nil
+        showAllRef = nil
+        hideAllRef = nil
         for ref in arrangementRefs.values { UnregisterEventHotKey(ref) }
         arrangementRefs.removeAll()
         for ref in stickySelectionRefs.values { UnregisterEventHotKey(ref) }
@@ -154,6 +175,8 @@ final class GlobalHotKeyManager {
                 else if id == 2 { manager.onNewSticky?() }
                 else if id == 3 { manager.onQuickCapture?() }
                 else if id == 4 { manager.onOpenStickyPicker?() }
+                else if id == 5 { manager.onShowAll?() }
+                else if id == 6 { manager.onHideAll?() }
                 else if id >= GlobalHotKeyManager.stickySelectionIDBase {
                     let index = Int(id - GlobalHotKeyManager.stickySelectionIDBase)
                     if (0..<StickySelectionShortcut.maximumStickyCount).contains(index) {

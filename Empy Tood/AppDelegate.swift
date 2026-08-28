@@ -69,6 +69,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         GlobalHotKeyManager.shared.onOpenStickyPicker = { [weak self] in
             self?.showQuickCapture(mode: .openSticky)
         }
+        GlobalHotKeyManager.shared.onShowAll = { [weak self] in
+            self?.manager.showAll()
+        }
+        GlobalHotKeyManager.shared.onHideAll = { [weak self] in
+            self?.manager.hideAll()
+        }
         GlobalHotKeyManager.shared.onArrange = { [weak self] arrangement in
             self?.manager.arrangeOpenStickies(arrangement)
         }
