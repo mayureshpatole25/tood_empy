@@ -42,6 +42,16 @@ final class AppSettings {
         }
     }
 
+    /// Shared presentation state for every open sticky. Timer countdowns stay
+    /// per-sticky; only whether their timer UI is visible is global.
+    var showsStickyTimers: Bool {
+        didSet { UserDefaults.standard.set(showsStickyTimers, forKey: Keys.showsStickyTimers) }
+    }
+
+    var showsDoneTasks: Bool {
+        didSet { UserDefaults.standard.set(showsDoneTasks, forKey: Keys.showsDoneTasks) }
+    }
+
     /// Starting duration for every newly opened sticky timer. Individual
     /// timers remain intentionally ephemeral and reset to this value when
     /// their sticky closes.
@@ -104,6 +114,8 @@ final class AppSettings {
         onboardingCompleted = d.bool(forKey: Keys.onboardingCompleted)
         launchAtLogin = d.bool(forKey: Keys.launchAtLogin)
         completionAnimationsEnabled = d.object(forKey: Keys.completionAnimationsEnabled) as? Bool ?? true
+        showsStickyTimers = d.object(forKey: Keys.showsStickyTimers) as? Bool ?? false
+        showsDoneTasks = d.object(forKey: Keys.showsDoneTasks) as? Bool ?? false
         defaultTimerSeconds = min(max(d.object(forKey: Keys.defaultTimerSeconds) as? Int ?? 300, 1), 359_999)
         timerCompletionSound = d.string(forKey: Keys.timerCompletionSound)
             .flatMap(TimerCompletionSound.init(rawValue:)) ?? .glass
@@ -121,6 +133,8 @@ final class AppSettings {
         static let onboardingCompleted = "today.onboardingCompleted"
         static let launchAtLogin = "today.launchAtLogin"
         static let completionAnimationsEnabled = "today.completionAnimationsEnabled"
+        static let showsStickyTimers = "today.showsStickyTimers"
+        static let showsDoneTasks = "today.showsDoneTasks"
         static let defaultTimerSeconds = "today.defaultTimerSeconds"
         static let timerCompletionSound = "today.timerCompletionSound"
         static let showShortcut = "today.showStickyShortcut"
