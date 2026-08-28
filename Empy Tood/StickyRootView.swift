@@ -674,9 +674,7 @@ struct StickyRootView: View {
     @State private var hovering = false
     @State private var hoveringTopChrome = false
     @State private var showColors = false
-    @State private var showsTimer = true
     @State private var timerReturnFocus: TimerReturnFocus?
-    @State private var showsDoneTasks = false
     @State private var doneItemsFilter: DoneItemsFilter = .allTime
     @State private var retainedCompletionIDs: Set<UUID> = []
     @State private var completionExitTasks: [UUID: Task<Void, Never>] = [:]
@@ -709,6 +707,12 @@ struct StickyRootView: View {
     private var color: StickyColor { model.color }
     private var completionAnimationsEnabled: Bool {
         AppSettings.shared.completionAnimationsEnabled
+    }
+    private var showsTimer: Bool {
+        AppSettings.shared.showsStickyTimers
+    }
+    private var showsDoneTasks: Bool {
+        AppSettings.shared.showsDoneTasks
     }
 
     init(model: StickyModel, controller: StickyController) {
@@ -824,6 +828,15 @@ struct StickyRootView: View {
                 cancelCompletionExitTasks()
             }
         }
+        .onChange(of: showsDoneTasks) { wasShowing, isShowing in
+            if isShowing {
+                model.groupDoneItemsAtBottom()
+            } else if wasShowing,
+                      let focusedID,
+                      model.items.first(where: { $0.id == focusedID })?.isDone == true {
+                self.focusedID = nil
+            }
+        }
         .onChange(of: focusedID) { _, new in model.focusedItemID = new }
         .onChange(of: titleFocused) { _, new in model.isTitleFocused = new }
     }
@@ -923,7 +936,7 @@ struct StickyRootView: View {
                 defaultSeconds: AppSettings.shared.defaultTimerSeconds,
                 ink: color.ink,
                 font: bodyFont(14),
-                reveal: { showsTimer = true },
+                reveal: { AppSettings.shared.showsStickyTimers = true },
                 prepareForEditing: captureTimerReturnFocus,
                 restoreAfterEditing: restoreFocusAfterTimerEdit
             )
@@ -1518,21 +1531,11 @@ struct StickyRootView: View {
     // MARK: - Bottom hover toolbar
 
     private func toggleDoneTaskVisibility() {
-        if !showsDoneTasks {
-            model.groupDoneItemsAtBottom()
-        }
-
-        if showsDoneTasks,
-           let focusedID,
-           model.items.first(where: { $0.id == focusedID })?.isDone == true {
-            self.focusedID = nil
-        }
-
         if accessibilityReduceMotion {
-            showsDoneTasks.toggle()
+            AppSettings.shared.showsDoneTasks.toggle()
         } else {
             withAnimation(.timingCurve(0.23, 1, 0.32, 1, duration: 0.2)) {
-                showsDoneTasks.toggle()
+                AppSettings.shared.showsDoneTasks.toggle()
             }
         }
     }
@@ -1580,7 +1583,7 @@ struct StickyRootView: View {
                         colorPicker
                     }
 
-                Button { showsTimer.toggle() } label: {
+                Button { AppSettings.shared.showsStickyTimers.toggle() } label: {
                     Image(systemName: "timer")
                 }
                 .opacity(showsTimer ? 1 : 0.55)
