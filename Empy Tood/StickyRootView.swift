@@ -689,6 +689,8 @@ struct StickyRootView: View {
     @State private var hoveredCheckboxID: UUID?
     @State private var addRowHovered = false
     @State private var suppressCheckboxToggleID: UUID?
+    @State private var dateDraft: TaskDateDraft?
+    @State private var highlightedDateSuggestion = 0
     /// The window's current width — the title needs it (see `header`) without a local
     /// `GeometryReader` forcing a fixed height on it. A previous version
     /// used a `titleWraps` heuristic (does the whole title fit on one line?)
@@ -803,6 +805,15 @@ struct StickyRootView: View {
             model.onMoveCaretVertically = { sourceID, direction, screenX in
                 moveCaretVertically(from: sourceID, direction: direction, screenX: screenX)
             }
+            model.onHandleDatePickerKey = { keyCode, modifiers in
+                handleDatePickerKey(keyCode, modifiers: modifiers)
+            }
+            model.onHandleDateTokenKey = { keyCode, modifiers, selection in
+                handleDateTokenKey(keyCode, modifiers: modifiers, selection: selection)
+            }
+            model.onNormalizeDateTokenSelection = { selection in
+                normalizeDateTokenSelection(selection)
+            }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
                     let offset = model.items.first(where: { $0.id == lastID })
@@ -818,6 +829,9 @@ struct StickyRootView: View {
         .onDisappear {
             model.onWillSetDone = nil
             model.onToggleDoneVisibility = nil
+            model.onHandleDatePickerKey = nil
+            model.onHandleDateTokenKey = nil
+            model.onNormalizeDateTokenSelection = nil
             cancelCompletionExitTasks()
         }
         .onChange(of: accessibilityReduceMotion) { _, reduceMotion in
@@ -1136,24 +1150,33 @@ struct StickyRootView: View {
     }
 
     private func row(_ item: TodoItem) -> some View {
-        ZStack {
+        let currentItem = model.items.first(where: { $0.id == item.id }) ?? item
+        let dueDate = currentItem.dueDate
+        let dateRange = currentItem.dueDateRange
+
+        return ZStack {
             VStack(spacing: 0) {
                 HStack(alignment: .center, spacing: 7) {
                     checkbox(item)
-                    // Keep completed rows editable too. Because this stays the
-                    // same TextField when isDone changes, its caret survives a
-                    // keyboard toggle and Command-Return can toggle it back.
-                    ZStack(alignment: .leading) {
-                        TextField("", text: textBinding(item), prompt: rowPrompt(item), axis: .vertical)
+                    // Keep the proven native SwiftUI TextField as the sole
+                    // editor/first responder. When a date exists, a combined
+                    // Text overlay renders task + date as one wrapping run;
+                    // the transparent hit layer accepts only date clicks.
+                    ZStack(alignment: Alignment(horizontal: .leading, vertical: .firstTextBaseline)) {
+                        TextField(
+                            "",
+                            text: textBinding(item),
+                            prompt: dueDate == nil ? rowPrompt(item) : nil,
+                            axis: .vertical
+                        )
                             .textFieldStyle(.plain)
                             .font(bodyFont(14))
-                            .foregroundStyle(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
-                            .tint(color.ink) // otherwise the cursor inherits the app's green accent — invisible on the green sticky
+                            .foregroundStyle(dateRange == nil
+                                ? (item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+                                : Color.clear)
+                            .tint(color.ink)
                             .lineLimit(1...12)
                             .focused($focusedID, equals: item.id)
-                            .onChange(of: bindingValue(item)) { _, newValue in
-                                handleDash(item, newValue)
-                            }
                             .onKeyPress(.return, phases: .down) { press in
                                 if press.modifiers.contains(.command) {
                                     toggleDone(item)
@@ -1166,6 +1189,30 @@ struct StickyRootView: View {
                             .fixedSize(horizontal: false, vertical: true)
                             .layoutPriority(1)
                             .contentShape(Rectangle())
+                        .onChange(of: bindingValue(item)) { _, newValue in
+                            handleDash(item, newValue)
+                            syncDateCommand(for: item.id, text: newValue)
+                        }
+
+                        if let dueDate, let dateRange {
+                            inlineTaskText(currentItem, dateRange: dateRange)
+                                .font(bodyFont(14))
+                                .lineLimit(1...12)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .allowsHitTesting(false)
+                                .overlay {
+                                    InlineDateHitTarget(
+                                        text: currentItem.text,
+                                        dateRange: dateRange,
+                                        font: bodyNSFont(14),
+                                        onDateClick: {
+                                            openDatePicker(for: item.id, selectedDate: dueDate)
+                                        }
+                                    )
+                                    .accessibilityLabel("Change date and time")
+                                }
+                        }
 
                         CompletionStrikethrough(
                             itemID: item.id,
@@ -1204,6 +1251,28 @@ struct StickyRootView: View {
             if draggingItemID == item.id {
                 transaction.animation = nil
             }
+        }
+        .popover(
+            isPresented: datePopoverPresented(for: item.id),
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: .trailing
+        ) {
+            TaskDateAssignmentPopover(
+                draft: dateDraftBinding(for: item.id),
+                highlightedSuggestion: highlightedDateSuggestion,
+                onHighlight: { highlightedDateSuggestion = $0 },
+                onChooseSuggestion: { suggestion in
+                    commitDate(suggestion.date, includesTime: suggestion.includesTime, for: item.id)
+                },
+                onCommit: { date, includesTime in
+                    commitDate(date, includesTime: includesTime, for: item.id)
+                },
+                onClear: { clearDate(for: item.id) },
+                onCancel: { closeDatePicker() },
+                onTimeEditingChange: { editing in
+                    model.isDateTimeFieldEditing = editing
+                }
+            )
         }
         .transition(.opacity)
     }
@@ -1829,6 +1898,312 @@ struct StickyRootView: View {
         controller.restoreCaretInCurrentEditor(atUTF16Offset: join)
     }
 
+    // MARK: - Task date assignment
+
+    private func syncDateCommand(for itemID: UUID, text: String) {
+        let caret = controller.currentCaretUTF16Offset() ?? (text as NSString).length
+        guard focusedID == itemID, let command = TaskDateCommand.active(in: text, caretUTF16Offset: caret) else {
+            if dateDraft?.itemID == itemID, TaskDateCommand.active(in: text, caretUTF16Offset: caret) == nil {
+                closeDatePicker(restoreFocus: false)
+            }
+            return
+        }
+
+        if let parsedDate = TaskDateExpression.date(from: command.query) {
+            DispatchQueue.main.async {
+                guard let currentText = model.items.first(where: { $0.id == itemID })?.text,
+                      TaskDateCommand.active(in: currentText, caretUTF16Offset: caret)?.query == command.query
+                else { return }
+                commitDate(parsedDate, includesTime: true, for: itemID)
+            }
+            return
+        }
+
+        highlightedDateSuggestion = 0
+        if dateDraft?.itemID == itemID {
+            dateDraft?.query = command.query
+            dateDraft?.commandRange = NSRange(command.range, in: text)
+        } else {
+            let selected = model.items.first(where: { $0.id == itemID })?.dueDate
+                ?? Date().roundedToNearestFiveMinutes()
+            let commandRange = NSRange(command.range, in: text)
+            presentDatePicker(
+                TaskDateDraft(
+                    itemID: itemID,
+                    query: command.query,
+                    selectedDate: selected,
+                    commandRange: commandRange,
+                    includesTime: false
+                )
+            )
+            // Opening a suggestion surface is observational: it must not move
+            // the insertion point away from the task. The time field becomes
+            // editable only after an explicit click inside the popover.
+            DispatchQueue.main.async {
+                focusItem(itemID, atUTF16Offset: caret)
+            }
+        }
+    }
+
+    private func openDatePicker(for itemID: UUID, selectedDate: Date) {
+        highlightedDateSuggestion = 0
+        let includesTime = model.items.first(where: { $0.id == itemID })?.dateTokenHasTime ?? false
+        presentDatePicker(TaskDateDraft(
+            itemID: itemID,
+            query: "",
+            selectedDate: selectedDate,
+            includesTime: includesTime
+        ))
+    }
+
+    private func presentDatePicker(_ draft: TaskDateDraft) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            dateDraft = draft
+        }
+    }
+
+    private func datePopoverPresented(for itemID: UUID) -> Binding<Bool> {
+        Binding(
+            get: { dateDraft?.itemID == itemID },
+            set: { presented in
+                if !presented, dateDraft?.itemID == itemID {
+                    closeDatePicker()
+                }
+            }
+        )
+    }
+
+    private func dateDraftBinding(for itemID: UUID) -> Binding<TaskDateDraft> {
+        Binding(
+            get: {
+                dateDraft ?? TaskDateDraft(
+                    itemID: itemID,
+                    query: "",
+                    selectedDate: Date().roundedToNearestFiveMinutes()
+                )
+            },
+            set: { updated in
+                guard updated.itemID == itemID else { return }
+                dateDraft = updated
+            }
+        )
+    }
+
+    private func handleDatePickerKey(_ keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> Bool {
+        guard let draft = dateDraft, modifiers.isEmpty else { return false }
+        let suggestions = TaskDateSuggestion.matching(draft.query)
+
+        switch keyCode {
+        case 53: // Escape
+            closeDatePicker()
+            return true
+        case 125 where !suggestions.isEmpty: // Down
+            highlightedDateSuggestion = min(highlightedDateSuggestion + 1, suggestions.count - 1)
+            return true
+        case 126 where !suggestions.isEmpty: // Up
+            highlightedDateSuggestion = max(highlightedDateSuggestion - 1, 0)
+            return true
+        case 48: // Tab accepts the highlighted suggestion; otherwise it still indents.
+            guard suggestions.indices.contains(highlightedDateSuggestion) else { return false }
+            let suggestion = suggestions[highlightedDateSuggestion]
+            commitDate(suggestion.date, includesTime: suggestion.includesTime, for: draft.itemID)
+            return true
+        case 36, 76: // Return / keypad Enter
+            if suggestions.indices.contains(highlightedDateSuggestion) {
+                let suggestion = suggestions[highlightedDateSuggestion]
+                commitDate(suggestion.date, includesTime: suggestion.includesTime, for: draft.itemID)
+            } else {
+                commitDate(draft.selectedDate, includesTime: draft.includesTime, for: draft.itemID)
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func handleDateTokenKey(
+        _ keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags,
+        selection: NSRange
+    ) -> Bool {
+        guard let itemID = focusedID,
+              let item = model.items.first(where: { $0.id == itemID }),
+              let tokenRange = item.dueDateRange,
+              let dateRange = item.dueDateDateRange
+        else { return false }
+
+        let segments = [dateRange, item.dueDateTimeRange].compactMap { $0 }
+        let isLeft = keyCode == 123
+        let isRight = keyCode == 124
+        if modifiers.isEmpty, selection.length == 0, isLeft || isRight {
+            if isLeft, let segment = segments.last(where: { NSMaxRange($0) == selection.location }) {
+                controller.restoreCaretInCurrentEditor(atUTF16Offset: segment.location)
+                return true
+            }
+            if isRight, let segment = segments.first(where: { $0.location == selection.location }) {
+                controller.restoreCaretInCurrentEditor(atUTF16Offset: NSMaxRange(segment))
+                return true
+            }
+        }
+
+        // Shift-arrow selects one semantic unit at a time: date first, then
+        // the optional time. Command-Shift-arrow remains the native line edit.
+        if modifiers == .shift, isLeft || isRight {
+            if selection.length == 0 {
+                if isRight, let segment = segments.first(where: { $0.location == selection.location }) {
+                    controller.restoreSelectionInCurrentEditor(segment)
+                    return true
+                }
+                if isLeft, let segment = segments.last(where: { NSMaxRange($0) == selection.location }) {
+                    controller.restoreSelectionInCurrentEditor(segment)
+                    return true
+                }
+            } else if selection == dateRange, isRight, let timeRange = item.dueDateTimeRange {
+                controller.restoreSelectionInCurrentEditor(NSUnionRange(dateRange, timeRange))
+                return true
+            } else if let timeRange = item.dueDateTimeRange, selection == timeRange, isLeft {
+                controller.restoreSelectionInCurrentEditor(tokenRange)
+                return true
+            }
+        }
+
+        guard modifiers.isEmpty else { return false }
+        let tokenEnd = NSMaxRange(tokenRange)
+
+        let isBackwardDelete = keyCode == 51
+        let isForwardDelete = keyCode == 117
+        let selectionTouchesToken = selection.length > 0 && NSIntersectionRange(selection, tokenRange).length > 0
+        let timeRange = item.dueDateTimeRange
+        let deletesAtBoundary = selection.length == 0 && (
+            (isBackwardDelete && selection.location == tokenEnd) ||
+            (isForwardDelete && (
+                selection.location == tokenRange.location || selection.location == timeRange?.location
+            ))
+        )
+        guard (isBackwardDelete || isForwardDelete), selectionTouchesToken || deletesAtBoundary else {
+            return false
+        }
+
+        let removesOnlyTime = timeRange.map { time in
+            selection == time ||
+            (selection.length == 0 && isBackwardDelete && selection.location == NSMaxRange(time)) ||
+            (selection.length == 0 && isForwardDelete && selection.location == time.location)
+        } ?? false
+
+        if removesOnlyTime, let timeRange {
+            let mutable = NSMutableString(string: item.text)
+            mutable.deleteCharacters(in: timeRange)
+            let dateText = (item.text as NSString).substring(with: dateRange)
+            controller.setDateToken(
+                itemID,
+                text: mutable as String,
+                dueDate: item.dueDate,
+                tokenText: dateText,
+                offset: dateRange.location,
+                hasTime: false
+            )
+            focusItem(itemID, atUTF16Offset: timeRange.location)
+            return true
+        }
+
+        let deletionRange: NSRange
+        if selectionTouchesToken {
+            let start = min(selection.location, tokenRange.location)
+            let end = max(NSMaxRange(selection), tokenEnd)
+            deletionRange = NSRange(location: start, length: end - start)
+        } else {
+            deletionRange = tokenRange
+        }
+        let mutable = NSMutableString(string: item.text)
+        mutable.deleteCharacters(in: deletionRange)
+        controller.setDateToken(
+            itemID,
+            text: mutable as String,
+            dueDate: nil,
+            tokenText: nil,
+            offset: nil,
+            hasTime: nil
+        )
+        dateDraft = nil
+        focusItem(itemID, atUTF16Offset: deletionRange.location)
+        return true
+    }
+
+    private func normalizeDateTokenSelection(_ selection: NSRange) -> NSRange? {
+        guard selection.length > 0,
+              let itemID = focusedID,
+              let item = model.items.first(where: { $0.id == itemID }),
+              let dateRange = item.dueDateDateRange
+        else { return nil }
+
+        var normalized = selection
+        for segment in [dateRange, item.dueDateTimeRange].compactMap({ $0 }) {
+            guard NSIntersectionRange(normalized, segment).length > 0 else { continue }
+            normalized = NSUnionRange(normalized, segment)
+        }
+        return normalized == selection ? nil : normalized
+    }
+
+    private func commitDate(_ date: Date, includesTime: Bool, for itemID: UUID) {
+        guard let item = model.items.first(where: { $0.id == itemID }) else { return }
+        let tokenText = TaskDatePresentation.string(from: date, includesTime: includesTime)
+        let sourceRange = dateDraft?.commandRange ?? item.dueDateRange
+        let mutable = NSMutableString(string: item.text)
+        let replacementRange: NSRange
+        if let sourceRange, NSMaxRange(sourceRange) <= mutable.length {
+            replacementRange = sourceRange
+        } else {
+            let separator = item.text.isEmpty || item.text.last?.isWhitespace == true ? "" : " "
+            mutable.append(separator)
+            replacementRange = NSRange(location: mutable.length, length: 0)
+        }
+        mutable.replaceCharacters(in: replacementRange, with: tokenText)
+        controller.setDateToken(
+            itemID,
+            text: mutable as String,
+            dueDate: date,
+            tokenText: tokenText,
+            offset: replacementRange.location,
+            hasTime: includesTime
+        )
+        model.isDateTimeFieldEditing = false
+        dateDraft = nil
+        let caret = replacementRange.location + (tokenText as NSString).length
+        focusItem(itemID, atUTF16Offset: caret)
+    }
+
+    private func clearDate(for itemID: UUID) {
+        guard let item = model.items.first(where: { $0.id == itemID }) else { return }
+        let mutable = NSMutableString(string: item.text)
+        let range = item.dueDateRange ?? dateDraft?.commandRange
+        if let range, NSMaxRange(range) <= mutable.length {
+            mutable.deleteCharacters(in: range)
+        }
+        controller.setDateToken(
+            itemID,
+            text: mutable as String,
+            dueDate: nil,
+            tokenText: nil,
+            offset: nil,
+            hasTime: nil
+        )
+        model.isDateTimeFieldEditing = false
+        dateDraft = nil
+        focusItem(itemID, atUTF16Offset: min(range?.location ?? mutable.length, mutable.length))
+    }
+
+    private func closeDatePicker(restoreFocus: Bool = true) {
+        let itemID = dateDraft?.itemID
+        model.isDateTimeFieldEditing = false
+        dateDraft = nil
+        guard restoreFocus, let itemID,
+              let text = model.items.first(where: { $0.id == itemID })?.text
+        else { return }
+        focusItem(itemID, atUTF16Offset: (text as NSString).length)
+    }
+
     private func handleDash(_ item: TodoItem, _ value: String) {
         if value == "-" {
             model.setText(item.id, "")
@@ -1848,8 +2223,43 @@ struct StickyRootView: View {
     private func textBinding(_ item: TodoItem) -> Binding<String> {
         Binding(
             get: { model.items.first { $0.id == item.id }?.text ?? "" },
-            set: { model.setText(item.id, $0) }
+            set: { updateTaskText(item.id, to: $0) }
         )
+    }
+
+    private func updateTaskText(_ itemID: UUID, to newText: String) {
+        guard let item = model.items.first(where: { $0.id == itemID }),
+              let tokenRange = item.dueDateRange
+        else {
+            model.setText(itemID, newText)
+            return
+        }
+        let old = item.text as NSString
+        let new = newText as NSString
+        var prefix = 0
+        while prefix < min(old.length, new.length), old.character(at: prefix) == new.character(at: prefix) {
+            prefix += 1
+        }
+        let delta = new.length - old.length
+        if prefix <= tokenRange.location {
+            model.setDateToken(
+                itemID,
+                text: newText,
+                dueDate: item.dueDate,
+                tokenText: item.dueDateText,
+                offset: max(0, tokenRange.location + delta),
+                hasTime: item.dueDateHasTime
+            )
+        } else {
+            model.setDateToken(
+                itemID,
+                text: newText,
+                dueDate: item.dueDate,
+                tokenText: item.dueDateText,
+                offset: tokenRange.location,
+                hasTime: item.dueDateHasTime
+            )
+        }
     }
 
     /// The first blank row should look and behave like an invitation to
@@ -1859,6 +2269,17 @@ struct StickyRootView: View {
               bindingValue(item).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
         return Text("Add a to-do…").foregroundStyle(color.ink.opacity(0.32))
+    }
+
+    private func inlineTaskText(_ item: TodoItem, dateRange: NSRange) -> Text {
+        let dateColor = item.isDone ? color.inkSecondary.opacity(0.6) : color.ink.opacity(0.6)
+        let nsText = item.text as NSString
+        let prefix = Text(nsText.substring(to: dateRange.location))
+            .foregroundColor(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+        let date = Text(nsText.substring(with: dateRange)).foregroundColor(dateColor)
+        let suffix = Text(nsText.substring(from: NSMaxRange(dateRange)))
+            .foregroundColor(item.isDone ? color.inkSecondary : color.ink.opacity(0.8))
+        return prefix + date + suffix
     }
 
     private func bodyFont(_ size: CGFloat) -> Font {

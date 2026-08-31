@@ -125,6 +125,16 @@ final class StickyController: NSObject, NSWindowDelegate {
                 return nil
             }
 
+            if !self.model.isDateTimeFieldEditing,
+               self.model.onHandleDatePickerKey?(event.keyCode, commandModifiers) == true {
+                return nil
+            }
+
+            if let editor = self.panel.firstResponder as? NSTextView,
+               self.model.onHandleDateTokenKey?(event.keyCode, commandModifiers, editor.selectedRange()) == true {
+                return nil
+            }
+
             if pressedKey == "w", commandModifiers == .command {
                 self.closeSticky()
                 return nil
@@ -313,6 +323,12 @@ final class StickyController: NSObject, NSWindowDelegate {
 
                 self.applySelectionStyle(to: editor)
 
+                if let normalized = self.model.onNormalizeDateTokenSelection?(editor.selectedRange()),
+                   normalized != editor.selectedRange() {
+                    editor.setSelectedRange(normalized)
+                    return
+                }
+
                 guard let placement = self.pendingCaretPlacement,
                       let target = self.pendingCaretTarget,
                       target.matches(self.model)
@@ -351,6 +367,16 @@ final class StickyController: NSObject, NSWindowDelegate {
             guard let self, let editor = self.panel.firstResponder as? NSTextView else { return }
             let length = (editor.string as NSString).length
             editor.setSelectedRange(NSRange(location: min(max(offset, 0), length), length: 0))
+        }
+    }
+
+    func restoreSelectionInCurrentEditor(_ range: NSRange) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let editor = self.panel.firstResponder as? NSTextView else { return }
+            let length = (editor.string as NSString).length
+            let start = min(max(range.location, 0), length)
+            let end = min(max(NSMaxRange(range), start), length)
+            editor.setSelectedRange(NSRange(location: start, length: end - start))
         }
     }
 
@@ -581,6 +607,51 @@ final class StickyController: NSObject, NSWindowDelegate {
         )
         guard destination != item.indentLevel else { return }
         setIndentLevel(id, to: destination)
+    }
+
+    func assignDueDate(_ dueDate: Date?, to id: UUID) {
+        guard let item = model.items.first(where: { $0.id == id }),
+              item.dueDate != dueDate
+        else { return }
+        let priorDate = item.dueDate
+
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.assignDueDate(priorDate, to: id)
+        }
+        completionUndoManager.setActionName(dueDate == nil ? "Clear Task Date" : "Assign Task Date")
+        model.setDueDate(id, dueDate)
+    }
+
+
+    func setDateToken(
+        _ id: UUID,
+        text: String,
+        dueDate: Date?,
+        tokenText: String?,
+        offset: Int?,
+        hasTime: Bool?
+    ) {
+        guard let item = model.items.first(where: { $0.id == id }) else { return }
+        let prior = item
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.setDateToken(
+                id,
+                text: prior.text,
+                dueDate: prior.dueDate,
+                tokenText: prior.dueDateText,
+                offset: prior.dueDateOffset,
+                hasTime: prior.dueDateHasTime
+            )
+        }
+        completionUndoManager.setActionName(dueDate == nil ? "Clear Task Date" : "Assign Task Date")
+        model.setDateToken(
+            id,
+            text: text,
+            dueDate: dueDate,
+            tokenText: tokenText,
+            offset: offset,
+            hasTime: hasTime
+        )
     }
 
     private func setIndentLevel(_ id: UUID, to level: Int) {
