@@ -125,6 +125,16 @@ final class StickyController: NSObject, NSWindowDelegate {
                 return nil
             }
 
+            if !self.model.isDateTimeFieldEditing,
+               self.model.onHandleDatePickerKey?(event.keyCode, commandModifiers) == true {
+                return nil
+            }
+
+            if let editor = self.panel.firstResponder as? NSTextView,
+               self.model.onHandleDateTokenKey?(event.keyCode, commandModifiers, editor.selectedRange()) == true {
+                return nil
+            }
+
             if pressedKey == "w", commandModifiers == .command {
                 self.closeSticky()
                 return nil
@@ -581,6 +591,36 @@ final class StickyController: NSObject, NSWindowDelegate {
         )
         guard destination != item.indentLevel else { return }
         setIndentLevel(id, to: destination)
+    }
+
+    func assignDueDate(_ dueDate: Date?, to id: UUID) {
+        guard let item = model.items.first(where: { $0.id == id }),
+              item.dueDate != dueDate
+        else { return }
+        let priorDate = item.dueDate
+
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.assignDueDate(priorDate, to: id)
+        }
+        completionUndoManager.setActionName(dueDate == nil ? "Clear Task Date" : "Assign Task Date")
+        model.setDueDate(id, dueDate)
+    }
+
+
+    func setDateToken(_ id: UUID, text: String, dueDate: Date?, tokenText: String?, offset: Int?) {
+        guard let item = model.items.first(where: { $0.id == id }) else { return }
+        let prior = item
+        completionUndoManager.registerUndo(withTarget: self) { controller in
+            controller.setDateToken(
+                id,
+                text: prior.text,
+                dueDate: prior.dueDate,
+                tokenText: prior.dueDateText,
+                offset: prior.dueDateOffset
+            )
+        }
+        completionUndoManager.setActionName(dueDate == nil ? "Clear Task Date" : "Assign Task Date")
+        model.setDateToken(id, text: text, dueDate: dueDate, tokenText: tokenText, offset: offset)
     }
 
     private func setIndentLevel(_ id: UUID, to level: Int) {

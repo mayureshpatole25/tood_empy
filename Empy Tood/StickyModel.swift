@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 
@@ -73,6 +74,13 @@ final class StickyModel: Identifiable {
     @ObservationIgnored var onMoveCaretToDocumentBoundary: ((Int) -> Void)?
     @ObservationIgnored var onMoveCaretHorizontally: ((UUID?, Int) -> Void)?
     @ObservationIgnored var onMoveCaretVertically: ((UUID?, Int, CGFloat) -> Void)?
+    /// Lets the custom date popover consume Escape, Return, and arrow keys
+    /// before the normal cross-row editing commands see them.
+    @ObservationIgnored var onHandleDatePickerKey: ((UInt16, NSEvent.ModifierFlags) -> Bool)?
+    @ObservationIgnored var onHandleDateTokenKey: ((UInt16, NSEvent.ModifierFlags, NSRange) -> Bool)?
+    /// While the popover's time input is active, its native TextField must
+    /// receive Return before the sticky-level date-picker key handler.
+    @ObservationIgnored var isDateTimeFieldEditing = false
 
     /// Set by the view; invoked by the window's key monitor when ⌘V pastes
     /// multi-line text — same bridge pattern, since focusing the resulting
@@ -82,7 +90,22 @@ final class StickyModel: Identifiable {
     init(data: StickyData) {
         self.id = data.id
         self.day = data.day
-        self.items = data.items
+        self.items = data.items.map { persistedItem in
+            var item = persistedItem
+            // Migrate dates saved by the earlier trailing-label implementation
+            // into the real editable string exactly once.
+            if let dueDate = item.dueDate,
+               item.dueDateText == nil,
+               item.dueDateOffset == nil {
+                let token = TaskDatePresentation.string(from: dueDate)
+                let separator = item.text.isEmpty || item.text.last?.isWhitespace == true ? "" : " "
+                item.text += separator
+                item.dueDateOffset = (item.text as NSString).length
+                item.text += token
+                item.dueDateText = token
+            }
+            return item
+        }
         self.colorID = data.colorID
         self.fontID = data.fontID
         // Persisted window geometry is untrusted input. AppKit can construct a
@@ -178,6 +201,21 @@ final class StickyModel: Identifiable {
     func setText(_ id: UUID, _ text: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].text = text
+        onChange?()
+    }
+
+    func setDueDate(_ id: UUID, _ dueDate: Date?) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].dueDate = dueDate
+        onChange?()
+    }
+
+    func setDateToken(_ id: UUID, text: String, dueDate: Date?, tokenText: String?, offset: Int?) {
+        guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
+        items[idx].text = text
+        items[idx].dueDate = dueDate
+        items[idx].dueDateText = tokenText
+        items[idx].dueDateOffset = offset
         onChange?()
     }
 
