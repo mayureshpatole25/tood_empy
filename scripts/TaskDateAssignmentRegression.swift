@@ -26,12 +26,14 @@ enum TaskDateAssignmentRegression {
         expect(removed.caretUTF16Offset == 8, "caret returns to the end of task text")
 
         let today = TaskDateSuggestion.matching("tod")
-        expect(today.map(\.id) == ["today"], "today appears while its command is typed")
+        expect(today.map(\.id) == ["today-date", "today-time"],
+               "date-only and timed today options appear together")
         expect(
-            TaskDateSuggestion.matching("today 2 p").map(\.id) == ["today"],
-            "today remains selected while its time is typed"
+            TaskDateSuggestion.matching("today at 2 pm").map(\.id) == ["today-date", "today-time"],
+            "date-only and typed-time options remain separately selectable"
         )
-        expect(TaskDateSuggestion.matching("tom").map(\.id) == ["tomorrow"], "suggestions filter by prefix")
+        expect(TaskDateSuggestion.matching("tom").map(\.id) == ["tomorrow-date", "tomorrow-time"],
+               "suggestions filter by prefix")
 
         let calendar = Calendar(identifier: .gregorian)
         let fixedNow = calendar.date(from: DateComponents(year: 2026, month: 8, day: 31, hour: 16))!
@@ -61,16 +63,41 @@ enum TaskDateAssignmentRegression {
             TaskDatePresentation.string(from: fixedNow, now: fixedNow, calendar: calendar) == "Today at 4:00 PM",
             "the inline date phrase uses 12-hour time"
         )
+        expect(
+            TaskDatePresentation.string(
+                from: fixedNow,
+                includesTime: false,
+                now: fixedNow,
+                calendar: calendar
+            ) == "Today",
+            "date-only assignment omits time entirely"
+        )
 
         let tokenText = "Today at 2:30 PM"
         let tokenItem = TodoItem(
             text: "Call \(tokenText) then email",
             dueDate: naturalDate,
             dueDateText: tokenText,
-            dueDateOffset: ("Call " as NSString).length
+            dueDateOffset: ("Call " as NSString).length,
+            dueDateHasTime: true
         )
         expect(tokenItem.dueDateRange == NSRange(location: 5, length: (tokenText as NSString).length),
                "the inline date retains its exact atomic range")
+        expect(tokenItem.dueDateDateRange == NSRange(location: 5, length: 5),
+               "the date is one atomic selection unit")
+        expect(tokenItem.dueDateTimeRange == NSRange(location: 10, length: 11),
+               "the optional time is a second atomic selection unit")
+
+        let dateOnly = TodoItem(
+            text: "Call Today after lunch",
+            dueDate: naturalDate,
+            dueDateText: "Today",
+            dueDateOffset: 5,
+            dueDateHasTime: false
+        )
+        expect(dateOnly.dueDateDateRange == dateOnly.dueDateRange,
+               "a date-only token remains one atomic unit")
+        expect(dateOnly.dueDateTimeRange == nil, "a date-only token has no time selection unit")
 
         print("Task date assignment regression checks passed (\(checks)).")
     }

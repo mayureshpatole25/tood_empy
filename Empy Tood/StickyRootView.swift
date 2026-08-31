@@ -811,6 +811,9 @@ struct StickyRootView: View {
             model.onHandleDateTokenKey = { keyCode, modifiers, selection in
                 handleDateTokenKey(keyCode, modifiers: modifiers, selection: selection)
             }
+            model.onNormalizeDateTokenSelection = { selection in
+                normalizeDateTokenSelection(selection)
+            }
             model.onMultilinePaste = { lines, targetID in
                 if let lastID = model.pasteLines(lines, after: targetID) {
                     let offset = model.items.first(where: { $0.id == lastID })
@@ -828,6 +831,7 @@ struct StickyRootView: View {
             model.onToggleDoneVisibility = nil
             model.onHandleDatePickerKey = nil
             model.onHandleDateTokenKey = nil
+            model.onNormalizeDateTokenSelection = nil
             cancelCompletionExitTasks()
         }
         .onChange(of: accessibilityReduceMotion) { _, reduceMotion in
@@ -1258,9 +1262,11 @@ struct StickyRootView: View {
                 highlightedSuggestion: highlightedDateSuggestion,
                 onHighlight: { highlightedDateSuggestion = $0 },
                 onChooseSuggestion: { suggestion in
-                    commitDate(suggestion.date, for: item.id)
+                    commitDate(suggestion.date, includesTime: suggestion.includesTime, for: item.id)
                 },
-                onCommit: { date in commitDate(date, for: item.id) },
+                onCommit: { date, includesTime in
+                    commitDate(date, includesTime: includesTime, for: item.id)
+                },
                 onClear: { clearDate(for: item.id) },
                 onCancel: { closeDatePicker() },
                 onTimeEditingChange: { editing in
@@ -1908,7 +1914,7 @@ struct StickyRootView: View {
                 guard let currentText = model.items.first(where: { $0.id == itemID })?.text,
                       TaskDateCommand.active(in: currentText, caretUTF16Offset: caret)?.query == command.query
                 else { return }
-                commitDate(parsedDate, for: itemID)
+                commitDate(parsedDate, includesTime: true, for: itemID)
             }
             return
         }
@@ -1926,7 +1932,8 @@ struct StickyRootView: View {
                     itemID: itemID,
                     query: command.query,
                     selectedDate: selected,
-                    commandRange: commandRange
+                    commandRange: commandRange,
+                    includesTime: false
                 )
             )
             // Opening a suggestion surface is observational: it must not move
@@ -1940,7 +1947,13 @@ struct StickyRootView: View {
 
     private func openDatePicker(for itemID: UUID, selectedDate: Date) {
         highlightedDateSuggestion = 0
-        presentDatePicker(TaskDateDraft(itemID: itemID, query: "", selectedDate: selectedDate))
+        let includesTime = model.items.first(where: { $0.id == itemID })?.dateTokenHasTime ?? false
+        presentDatePicker(TaskDateDraft(
+            itemID: itemID,
+            query: "",
+            selectedDate: selectedDate,
+            includesTime: includesTime
+        ))
     }
 
     private func presentDatePicker(_ draft: TaskDateDraft) {
@@ -1994,13 +2007,15 @@ struct StickyRootView: View {
             return true
         case 48: // Tab accepts the highlighted suggestion; otherwise it still indents.
             guard suggestions.indices.contains(highlightedDateSuggestion) else { return false }
-            commitDate(suggestions[highlightedDateSuggestion].date, for: draft.itemID)
+            let suggestion = suggestions[highlightedDateSuggestion]
+            commitDate(suggestion.date, includesTime: suggestion.includesTime, for: draft.itemID)
             return true
         case 36, 76: // Return / keypad Enter
             if suggestions.indices.contains(highlightedDateSuggestion) {
-                commitDate(suggestions[highlightedDateSuggestion].date, for: draft.itemID)
+                let suggestion = suggestions[highlightedDateSuggestion]
+                commitDate(suggestion.date, includesTime: suggestion.includesTime, for: draft.itemID)
             } else {
-                commitDate(draft.selectedDate, for: draft.itemID)
+                commitDate(draft.selectedDate, includesTime: draft.includesTime, for: draft.itemID)
             }
             return true
         default:
@@ -2015,32 +2030,82 @@ struct StickyRootView: View {
     ) -> Bool {
         guard let itemID = focusedID,
               let item = model.items.first(where: { $0.id == itemID }),
-              let tokenRange = item.dueDateRange
+              let tokenRange = item.dueDateRange,
+              let dateRange = item.dueDateDateRange
         else { return false }
 
-        // Keep modified native selection commands—including Cmd-Shift-arrow—
-        // untouched. The token is real text, so AppKit can select across it.
+        let segments = [dateRange, item.dueDateTimeRange].compactMap { $0 }
+        let isLeft = keyCode == 123
+        let isRight = keyCode == 124
+        if modifiers.isEmpty, selection.length == 0, isLeft || isRight {
+            if isLeft, let segment = segments.last(where: { NSMaxRange($0) == selection.location }) {
+                controller.restoreCaretInCurrentEditor(atUTF16Offset: segment.location)
+                return true
+            }
+            if isRight, let segment = segments.first(where: { $0.location == selection.location }) {
+                controller.restoreCaretInCurrentEditor(atUTF16Offset: NSMaxRange(segment))
+                return true
+            }
+        }
+
+        // Shift-arrow selects one semantic unit at a time: date first, then
+        // the optional time. Command-Shift-arrow remains the native line edit.
+        if modifiers == .shift, isLeft || isRight {
+            if selection.length == 0 {
+                if isRight, let segment = segments.first(where: { $0.location == selection.location }) {
+                    controller.restoreSelectionInCurrentEditor(segment)
+                    return true
+                }
+                if isLeft, let segment = segments.last(where: { NSMaxRange($0) == selection.location }) {
+                    controller.restoreSelectionInCurrentEditor(segment)
+                    return true
+                }
+            } else if selection == dateRange, isRight, let timeRange = item.dueDateTimeRange {
+                controller.restoreSelectionInCurrentEditor(NSUnionRange(dateRange, timeRange))
+                return true
+            } else if let timeRange = item.dueDateTimeRange, selection == timeRange, isLeft {
+                controller.restoreSelectionInCurrentEditor(tokenRange)
+                return true
+            }
+        }
+
         guard modifiers.isEmpty else { return false }
         let tokenEnd = NSMaxRange(tokenRange)
-
-        if keyCode == 123, selection.length == 0, selection.location == tokenEnd { // Left
-            controller.restoreCaretInCurrentEditor(atUTF16Offset: tokenRange.location)
-            return true
-        }
-        if keyCode == 124, selection.length == 0, selection.location == tokenRange.location { // Right
-            controller.restoreCaretInCurrentEditor(atUTF16Offset: tokenEnd)
-            return true
-        }
 
         let isBackwardDelete = keyCode == 51
         let isForwardDelete = keyCode == 117
         let selectionTouchesToken = selection.length > 0 && NSIntersectionRange(selection, tokenRange).length > 0
+        let timeRange = item.dueDateTimeRange
         let deletesAtBoundary = selection.length == 0 && (
             (isBackwardDelete && selection.location == tokenEnd) ||
-            (isForwardDelete && selection.location == tokenRange.location)
+            (isForwardDelete && (
+                selection.location == tokenRange.location || selection.location == timeRange?.location
+            ))
         )
         guard (isBackwardDelete || isForwardDelete), selectionTouchesToken || deletesAtBoundary else {
             return false
+        }
+
+        let removesOnlyTime = timeRange.map { time in
+            selection == time ||
+            (selection.length == 0 && isBackwardDelete && selection.location == NSMaxRange(time)) ||
+            (selection.length == 0 && isForwardDelete && selection.location == time.location)
+        } ?? false
+
+        if removesOnlyTime, let timeRange {
+            let mutable = NSMutableString(string: item.text)
+            mutable.deleteCharacters(in: timeRange)
+            let dateText = (item.text as NSString).substring(with: dateRange)
+            controller.setDateToken(
+                itemID,
+                text: mutable as String,
+                dueDate: item.dueDate,
+                tokenText: dateText,
+                offset: dateRange.location,
+                hasTime: false
+            )
+            focusItem(itemID, atUTF16Offset: timeRange.location)
+            return true
         }
 
         let deletionRange: NSRange
@@ -2053,15 +2118,37 @@ struct StickyRootView: View {
         }
         let mutable = NSMutableString(string: item.text)
         mutable.deleteCharacters(in: deletionRange)
-        controller.setDateToken(itemID, text: mutable as String, dueDate: nil, tokenText: nil, offset: nil)
+        controller.setDateToken(
+            itemID,
+            text: mutable as String,
+            dueDate: nil,
+            tokenText: nil,
+            offset: nil,
+            hasTime: nil
+        )
         dateDraft = nil
         focusItem(itemID, atUTF16Offset: deletionRange.location)
         return true
     }
 
-    private func commitDate(_ date: Date, for itemID: UUID) {
+    private func normalizeDateTokenSelection(_ selection: NSRange) -> NSRange? {
+        guard selection.length > 0,
+              let itemID = focusedID,
+              let item = model.items.first(where: { $0.id == itemID }),
+              let dateRange = item.dueDateDateRange
+        else { return nil }
+
+        var normalized = selection
+        for segment in [dateRange, item.dueDateTimeRange].compactMap({ $0 }) {
+            guard NSIntersectionRange(normalized, segment).length > 0 else { continue }
+            normalized = NSUnionRange(normalized, segment)
+        }
+        return normalized == selection ? nil : normalized
+    }
+
+    private func commitDate(_ date: Date, includesTime: Bool, for itemID: UUID) {
         guard let item = model.items.first(where: { $0.id == itemID }) else { return }
-        let tokenText = TaskDatePresentation.string(from: date)
+        let tokenText = TaskDatePresentation.string(from: date, includesTime: includesTime)
         let sourceRange = dateDraft?.commandRange ?? item.dueDateRange
         let mutable = NSMutableString(string: item.text)
         let replacementRange: NSRange
@@ -2078,7 +2165,8 @@ struct StickyRootView: View {
             text: mutable as String,
             dueDate: date,
             tokenText: tokenText,
-            offset: replacementRange.location
+            offset: replacementRange.location,
+            hasTime: includesTime
         )
         model.isDateTimeFieldEditing = false
         dateDraft = nil
@@ -2093,7 +2181,14 @@ struct StickyRootView: View {
         if let range, NSMaxRange(range) <= mutable.length {
             mutable.deleteCharacters(in: range)
         }
-        controller.setDateToken(itemID, text: mutable as String, dueDate: nil, tokenText: nil, offset: nil)
+        controller.setDateToken(
+            itemID,
+            text: mutable as String,
+            dueDate: nil,
+            tokenText: nil,
+            offset: nil,
+            hasTime: nil
+        )
         model.isDateTimeFieldEditing = false
         dateDraft = nil
         focusItem(itemID, atUTF16Offset: min(range?.location ?? mutable.length, mutable.length))
@@ -2152,7 +2247,8 @@ struct StickyRootView: View {
                 text: newText,
                 dueDate: item.dueDate,
                 tokenText: item.dueDateText,
-                offset: max(0, tokenRange.location + delta)
+                offset: max(0, tokenRange.location + delta),
+                hasTime: item.dueDateHasTime
             )
         } else {
             model.setDateToken(
@@ -2160,7 +2256,8 @@ struct StickyRootView: View {
                 text: newText,
                 dueDate: item.dueDate,
                 tokenText: item.dueDateText,
-                offset: tokenRange.location
+                offset: tokenRange.location,
+                hasTime: item.dueDateHasTime
             )
         }
     }

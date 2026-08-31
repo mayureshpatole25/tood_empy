@@ -98,23 +98,25 @@ extension Date {
 
 struct TaskDateSuggestion: Identifiable, Equatable {
     let id: String
+    let command: String
     let title: String
     let detail: String
     let date: Date
+    let includesTime: Bool
 
     static func matching(_ query: String, now: Date = Date(), calendar: Calendar = .current) -> [Self] {
-        let candidates = all(now: now, calendar: calendar)
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let typedDate = TaskDateExpression.date(from: normalized, now: now, calendar: calendar)
+        let candidates = all(now: now, calendar: calendar, typedDate: typedDate)
         guard !normalized.isEmpty else { return candidates }
         return candidates.filter {
-            $0.id.hasPrefix(normalized) ||
-            $0.title.lowercased().hasPrefix(normalized) ||
-            normalized.hasPrefix($0.id + " ") ||
-            normalized.hasPrefix($0.title.lowercased() + " ")
+            $0.command.hasPrefix(normalized) ||
+            normalized.hasPrefix($0.command + " ") ||
+            normalized.hasPrefix($0.command + " at ")
         }
     }
 
-    private static func all(now: Date, calendar: Calendar) -> [Self] {
+    private static func all(now: Date, calendar: Calendar, typedDate: Date?) -> [Self] {
         let roundedNow = now.roundedToNearestFiveMinutes(calendar: calendar)
         let time = calendar.dateComponents([.hour, .minute], from: roundedNow)
         func applyingTime(to day: Date) -> Date {
@@ -124,12 +126,46 @@ struct TaskDateSuggestion: Identifiable, Equatable {
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
         let nextWeek = calendar.date(byAdding: .day, value: 7, to: today) ?? today
         let evening = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: today) ?? today
-        return [
-            Self(id: "today", title: "Today", detail: dayDetail(today), date: applyingTime(to: today)),
-            Self(id: "tonight", title: "Tonight", detail: "6:00 PM", date: evening),
-            Self(id: "tomorrow", title: "Tomorrow", detail: dayDetail(tomorrow), date: applyingTime(to: tomorrow)),
-            Self(id: "nextweek", title: "Next week", detail: dayDetail(nextWeek), date: applyingTime(to: nextWeek))
-        ]
+        func pair(command: String, title: String, day: Date, defaultTimedDate: Date) -> [Self] {
+            let timedDate = typedDate.map { typed in
+                let typedTime = calendar.dateComponents([.hour, .minute], from: typed)
+                return calendar.date(
+                    bySettingHour: typedTime.hour ?? 9,
+                    minute: typedTime.minute ?? 0,
+                    second: 0,
+                    of: day
+                ) ?? defaultTimedDate
+            } ?? defaultTimedDate
+            return [
+                Self(
+                    id: "\(command)-date",
+                    command: command,
+                    title: title,
+                    detail: dayDetail(day),
+                    date: day,
+                    includesTime: false
+                ),
+                Self(
+                    id: "\(command)-time",
+                    command: command,
+                    title: "\(title) at \(TaskDatePresentation.timeString(from: timedDate))",
+                    detail: dayDetail(day),
+                    date: timedDate,
+                    includesTime: true
+                )
+            ]
+        }
+        return pair(command: "today", title: "Today", day: today, defaultTimedDate: applyingTime(to: today))
+            + [Self(
+                id: "tonight-time",
+                command: "tonight",
+                title: "Tonight at 6:00 PM",
+                detail: dayDetail(today),
+                date: evening,
+                includesTime: true
+            )]
+            + pair(command: "tomorrow", title: "Tomorrow", day: tomorrow, defaultTimedDate: applyingTime(to: tomorrow))
+            + pair(command: "next week", title: "Next week", day: nextWeek, defaultTimedDate: applyingTime(to: nextWeek))
     }
 
     private static func dayDetail(_ date: Date) -> String {
@@ -145,18 +181,31 @@ struct TaskDateDraft: Equatable {
     var selectedDate: Date
     var displayedMonth: Date
     var commandRange: NSRange?
+    var includesTime: Bool
 
-    init(itemID: UUID, query: String, selectedDate: Date, commandRange: NSRange? = nil) {
+    init(
+        itemID: UUID,
+        query: String,
+        selectedDate: Date,
+        commandRange: NSRange? = nil,
+        includesTime: Bool = false
+    ) {
         self.itemID = itemID
         self.query = query
         self.selectedDate = selectedDate
         self.displayedMonth = Calendar.current.dateInterval(of: .month, for: selectedDate)?.start ?? selectedDate
         self.commandRange = commandRange
+        self.includesTime = includesTime
     }
 }
 
 enum TaskDatePresentation {
-    static func string(from date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+    static func string(
+        from date: Date,
+        includesTime: Bool = true,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
         let day: String
         if calendar.isDate(date, inSameDayAs: now) {
             day = "Today"
@@ -168,7 +217,7 @@ enum TaskDatePresentation {
             formatter.dateFormat = "MMM d"
             day = formatter.string(from: date)
         }
-        return "\(day) at \(timeString(from: date))"
+        return includesTime ? "\(day) at \(timeString(from: date))" : day
     }
 
     static func timeString(from date: Date) -> String {
@@ -194,7 +243,7 @@ struct TaskDateAssignmentPopover: View {
     let highlightedSuggestion: Int
     let onHighlight: (Int) -> Void
     let onChooseSuggestion: (TaskDateSuggestion) -> Void
-    let onCommit: (Date) -> Void
+    let onCommit: (Date, Bool) -> Void
     let onClear: () -> Void
     let onCancel: () -> Void
     let onTimeEditingChange: (Bool) -> Void
@@ -280,6 +329,7 @@ struct TaskDateAssignmentPopover: View {
                 } else {
                     Button {
                         timeEditing = true
+                        draft.includesTime = true
                         DispatchQueue.main.async { timeFocused = true }
                     } label: {
                         Text(TaskDatePresentation.timeString(from: draft.selectedDate))
@@ -319,7 +369,7 @@ struct TaskDateAssignmentPopover: View {
                     onChooseSuggestion(suggestion)
                 } label: {
                     HStack(spacing: 10) {
-                        Text("@\(suggestion.id)")
+                        Text(suggestion.title)
                             .foregroundStyle(TaskDatePickerStyle.primary)
                         Spacer(minLength: 8)
                         Text(suggestion.detail)
@@ -412,7 +462,7 @@ struct TaskDateAssignmentPopover: View {
                 let date = dateApplyingTypedTime() ?? draft.selectedDate
                 draft.selectedDate = date
                 timeText = TaskDatePresentation.timeString(from: date)
-                onCommit(date)
+                onCommit(date, draft.includesTime)
             }
             .fontWeight(.semibold)
             .foregroundStyle(Color.white)
@@ -462,6 +512,7 @@ struct TaskDateAssignmentPopover: View {
 
     private func timeStepButton(symbol: String, minutes: Int) -> some View {
         Button {
+            draft.includesTime = true
             applyTypedTime()
             let updated = calendar.date(
                 byAdding: .minute,

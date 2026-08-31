@@ -78,6 +78,7 @@ final class StickyModel: Identifiable {
     /// before the normal cross-row editing commands see them.
     @ObservationIgnored var onHandleDatePickerKey: ((UInt16, NSEvent.ModifierFlags) -> Bool)?
     @ObservationIgnored var onHandleDateTokenKey: ((UInt16, NSEvent.ModifierFlags, NSRange) -> Bool)?
+    @ObservationIgnored var onNormalizeDateTokenSelection: ((NSRange) -> NSRange?)?
     /// While the popover's time input is active, its native TextField must
     /// receive Return before the sticky-level date-picker key handler.
     @ObservationIgnored var isDateTimeFieldEditing = false
@@ -103,6 +104,7 @@ final class StickyModel: Identifiable {
                 item.dueDateOffset = (item.text as NSString).length
                 item.text += token
                 item.dueDateText = token
+                item.dueDateHasTime = true
             }
             return item
         }
@@ -210,12 +212,20 @@ final class StickyModel: Identifiable {
         onChange?()
     }
 
-    func setDateToken(_ id: UUID, text: String, dueDate: Date?, tokenText: String?, offset: Int?) {
+    func setDateToken(
+        _ id: UUID,
+        text: String,
+        dueDate: Date?,
+        tokenText: String?,
+        offset: Int?,
+        hasTime: Bool?
+    ) {
         guard let idx = items.firstIndex(where: { $0.id == id }) else { return }
         items[idx].text = text
         items[idx].dueDate = dueDate
         items[idx].dueDateText = tokenText
         items[idx].dueDateOffset = offset
+        items[idx].dueDateHasTime = hasTime
         onChange?()
     }
 

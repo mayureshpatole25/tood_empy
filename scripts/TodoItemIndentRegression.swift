@@ -34,7 +34,8 @@ enum TodoItemIndentRegression {
             text: "Call \(token) after lunch",
             dueDate: assignedDate,
             dueDateText: token,
-            dueDateOffset: 5
+            dueDateOffset: 5,
+            dueDateHasTime: true
         )
         let inlineRoundTrip = try JSONDecoder().decode(
             TodoItem.self,
@@ -42,6 +43,7 @@ enum TodoItemIndentRegression {
         )
         expect(inlineRoundTrip.dueDateRange == NSRange(location: 5, length: (token as NSString).length),
                "inline date ranges persist across encoding")
+        expect(inlineRoundTrip.dueDateHasTime == true, "optional time presence persists across encoding")
 
         var restored = roundTrip
         restored.adjustIndent(by: -1)
