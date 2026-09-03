@@ -53,7 +53,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
-        let showAllItem = menu.addItem(withTitle: "Show All", action: #selector(showAll), keyEquivalent: "s")
+        let showAllItem = menu.addItem(withTitle: "Show All Here", action: #selector(showAll), keyEquivalent: "s")
         showAllItem.target = self
         showAllItem.keyEquivalentModifierMask = [.command, .control, .option]
         let hideAllItem = menu.addItem(withTitle: "Hide All", action: #selector(hideAll), keyEquivalent: "a")

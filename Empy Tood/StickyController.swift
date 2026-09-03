@@ -496,6 +496,37 @@ final class StickyController: NSObject, NSWindowDelegate {
         panel.orderFront(nil) // normal ordering — other apps can cover it
     }
 
+    /// Reassigns the sticky to the Space that is active when the global
+    /// "Show All" shortcut fires. This must happen before Empy Tood is
+    /// activated; otherwise AppKit can switch to a Space that already owns
+    /// one of the app's windows instead of moving the sticky to the user.
+    func gatherToActiveSpace() {
+        model.isVisible = true
+        let screen = Self.bestScreen(for: model.frame)
+        updateWindowSizeLimits(for: screen)
+        let frame = StickyWindowGeometry.runtimeFrame(
+            model.frame,
+            visibleFrame: screen?.visibleFrame
+        )
+        setPanelFrame(frame, display: true)
+        syncFrame(persist: frame != model.frame)
+
+        // Ordering an already-visible managed window only fronts it on the
+        // Space it currently belongs to. Remove it from the window list, opt
+        // into AppKit's supported active-Space migration, then order it back
+        // without activating the application and changing the destination.
+        panel.orderOut(nil)
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenNone]
+        panel.orderFrontRegardless()
+
+        // The migration is handled as part of ordering the window. Restore
+        // ordinary Spaces behaviour on the next run-loop pass so the sticky
+        // stays where it was gathered instead of following future activity.
+        DispatchQueue.main.async { [weak panel] in
+            panel?.collectionBehavior = [.managed, .fullScreenNone]
+        }
+    }
+
     /// Finds the display that owns the largest part of a frame. A completely
     /// off-screen frame (for example after disconnecting a monitor) heals onto
     /// the main display.
