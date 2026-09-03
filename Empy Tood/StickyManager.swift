@@ -155,7 +155,21 @@ final class StickyManager {
         archivedStickies = stickyArchive.load().sorted { $0.archivedAt > $1.archivedAt }
     }
 
-    func showAll() { for c in controllers.values { c.show() } }
+    /// Gathers every sticky onto the Space where the command was invoked.
+    /// Keep the application inactive while ordering so the user's current
+    /// Space remains the destination. The most recently used sticky is
+    /// ordered last and therefore remains at the front of the gathered set.
+    func showAll() {
+        var orderedControllers = order.compactMap { controllers[$0] }
+        if let activeID = mostRecentlyActiveID,
+           let activeIndex = orderedControllers.firstIndex(where: { $0.model.id == activeID }) {
+            orderedControllers.append(orderedControllers.remove(at: activeIndex))
+        }
+        for controller in orderedControllers {
+            controller.gatherToActiveSpace()
+        }
+        scheduleSave()
+    }
     func hideAll() { for c in controllers.values { c.hide() } }
 
     var openStickyCount: Int {
