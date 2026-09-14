@@ -84,12 +84,18 @@ struct SettingsView: View {
                 LabeledContent("Quick Capture") {
                     ShortcutRecorderField(combo: $settings.quickCaptureShortcut)
                 }
-                Text("Works anywhere, even while another app is frontmost.")
+                ForEach(0..<StickySelectionShortcut.maximumStickyCount, id: \.self) { index in
+                    LabeledContent("Open Sticky \(index + 1)") {
+                        ShortcutRecorderField(combo: $settings.stickySelectionShortcuts[index])
+                    }
+                }
+                Text("Stickies follow the order in Home. Works anywhere, even while another app is frontmost.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .onChange(of: settings.showStickyShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
             .onChange(of: settings.newStickyShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
+            .onChange(of: settings.stickySelectionShortcuts) { _, _ in GlobalHotKeyManager.shared.reregister() }
             .onChange(of: settings.quickCaptureShortcut) { _, _ in GlobalHotKeyManager.shared.reregister() }
         }
         .formStyle(.grouped)

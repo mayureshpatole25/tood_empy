@@ -21,6 +21,12 @@ final class GlobalHotKeyManager {
     var onArrange: ((StickyArrangement) -> Void)?
     var onSelectSticky: ((Int) -> Void)?
 
+    var isRecordingShortcut = false {
+        didSet {
+            if isRecordingShortcut { unregisterAll() } else { reregister() }
+        }
+    }
+
     private var showRef: EventHotKeyRef?
     private var newRef: EventHotKeyRef?
     private var quickCaptureRef: EventHotKeyRef?
@@ -48,6 +54,7 @@ final class GlobalHotKeyManager {
     /// Re-reads the current shortcuts from `AppSettings` and re-registers.
     /// Call after either shortcut is changed, and once at launch.
     func reregister() {
+        guard !isRecordingShortcut else { return }
         unregisterAll()
         register(AppSettings.shared.showStickyShortcut, id: showID, into: &showRef)
         register(AppSettings.shared.newStickyShortcut, id: newID, into: &newRef)
@@ -116,7 +123,6 @@ final class GlobalHotKeyManager {
     }
 
     private func registerStickySelectionShortcuts() {
-        let modifiers = UInt32(controlKey)
         for index in 0..<StickySelectionShortcut.maximumStickyCount {
             let id = EventHotKeyID(
                 signature: Self.signature,
@@ -124,29 +130,14 @@ final class GlobalHotKeyManager {
             )
             var ref: EventHotKeyRef?
             RegisterEventHotKey(
-                Self.keyCode(forStickyIndex: index),
-                modifiers,
+                AppSettings.shared.stickySelectionShortcuts[index].keyCode,
+                AppSettings.shared.stickySelectionShortcuts[index].modifiers,
                 id,
                 GetApplicationEventTarget(),
                 0,
                 &ref
             )
             if let ref { stickySelectionRefs[index] = ref }
-        }
-    }
-
-    private static func keyCode(forStickyIndex index: Int) -> UInt32 {
-        switch index {
-        case 0: return UInt32(kVK_ANSI_1)
-        case 1: return UInt32(kVK_ANSI_2)
-        case 2: return UInt32(kVK_ANSI_3)
-        case 3: return UInt32(kVK_ANSI_4)
-        case 4: return UInt32(kVK_ANSI_5)
-        case 5: return UInt32(kVK_ANSI_6)
-        case 6: return UInt32(kVK_ANSI_7)
-        case 7: return UInt32(kVK_ANSI_8)
-        case 8: return UInt32(kVK_ANSI_9)
-        default: return UInt32(kVK_ANSI_0)
         }
     }
 

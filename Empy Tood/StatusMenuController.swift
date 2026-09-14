@@ -47,12 +47,13 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
             header.isEnabled = false
             menu.addItem(header)
             for (index, sticky) in stickies.enumerated() {
-                let shortcut = StickySelectionShortcut.keyEquivalent(forStickyIndex: index)
+                let shortcuts = AppSettings.shared.stickySelectionShortcuts
+                let shortcut = shortcuts.indices.contains(index) ? shortcuts[index] : nil
                 let item = NSMenuItem(title: "  \(sticky.title)",
-                                      action: #selector(focusSticky(_:)), keyEquivalent: shortcut ?? "")
+                                      action: #selector(focusSticky(_:)), keyEquivalent: shortcut?.menuKeyEquivalent ?? "")
                 item.target = self
                 item.representedObject = sticky.id
-                if shortcut != nil { item.keyEquivalentModifierMask = [.control] }
+                if let shortcut { item.keyEquivalentModifierMask = shortcut.menuModifierMask }
                 menu.addItem(item)
             }
         }
