@@ -79,6 +79,12 @@ final class AppSettings {
         didSet { UserDefaults.standard.set(newStickyShortcut.rawValue, forKey: Keys.newShortcut) }
     }
 
+    var stickySelectionShortcuts: [KeyCombo] {
+        didSet {
+            UserDefaults.standard.set(stickySelectionShortcuts.map(\.rawValue), forKey: Keys.stickySelectionShortcuts)
+        }
+    }
+
     var quickCaptureShortcut: KeyCombo {
         didSet { UserDefaults.standard.set(quickCaptureShortcut.rawValue, forKey: Keys.quickCaptureShortcut) }
     }
@@ -128,6 +134,12 @@ final class AppSettings {
         showStickyShortcut = d.string(forKey: Keys.showShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultShowSticky
         newStickyShortcut = d.string(forKey: Keys.newShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultNewSticky
         quickCaptureShortcut = d.string(forKey: Keys.quickCaptureShortcut).flatMap(KeyCombo.init(rawValue:)) ?? .defaultQuickCapture
+        let savedSelectionShortcuts = d.stringArray(forKey: Keys.stickySelectionShortcuts) ?? []
+        stickySelectionShortcuts = (0..<StickySelectionShortcut.maximumStickyCount).map { index in
+            if savedSelectionShortcuts.indices.contains(index),
+               let combo = KeyCombo(rawValue: savedSelectionShortcuts[index]) { return combo }
+            return KeyCombo.defaultStickySelection(at: index)
+        }
         journalPrompt = d.string(forKey: Keys.journalPrompt) ?? "What's actually on your mind today?"
         journalLocationEnabled = d.object(forKey: Keys.journalLocation) as? Bool ?? true
         userName = d.string(forKey: Keys.userName) ?? ""
@@ -146,6 +158,7 @@ final class AppSettings {
         static let timerCompletionSound = "today.timerCompletionSound"
         static let showShortcut = "today.showStickyShortcut"
         static let newShortcut = "today.newStickyShortcut"
+        static let stickySelectionShortcuts = "today.stickySelectionShortcuts"
         static let quickCaptureShortcut = "today.quickCaptureShortcut"
         static let journalPrompt = "today.journalPrompt"
         static let journalLocation = "today.journalLocationEnabled"

@@ -23,6 +23,32 @@ struct KeyCombo: Equatable, Codable {
     static let defaultNewSticky = KeyCombo(keyCode: UInt32(kVK_ANSI_N), modifiers: UInt32(cmdKey | controlKey))
     static let defaultQuickCapture = KeyCombo(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(controlKey))
 
+    static func defaultStickySelection(at index: Int) -> KeyCombo {
+        let codes = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5,
+                     kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9, kVK_ANSI_0]
+        return KeyCombo(keyCode: UInt32(codes[index]), modifiers: UInt32(controlKey))
+    }
+
+    var menuKeyEquivalent: String {
+        switch keyCode {
+        case UInt32(kVK_Space): return " "
+        case UInt32(kVK_Return): return "\r"
+        case UInt32(kVK_Tab): return "\t"
+        default:
+            let name = Self.name(forKeyCode: keyCode)
+            return name.count == 1 ? name.lowercased() : ""
+        }
+    }
+
+    var menuModifierMask: NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if modifiers & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        if modifiers & UInt32(controlKey) != 0 { flags.insert(.control) }
+        if modifiers & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if modifiers & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        return flags
+    }
+
     // MARK: - Codable (stored as a single string in UserDefaults)
 
     private enum CodingKeys: String, CodingKey { case keyCode, modifiers }

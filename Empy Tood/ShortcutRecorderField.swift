@@ -25,6 +25,10 @@ struct ShortcutRecorderField: View {
         .focused($focused)
         .onKeyPress(phases: .down) { press in
             guard isRecording else { return .ignored }
+            if press.key == .escape {
+                isRecording = false
+                return .handled
+            }
             var mods: UInt32 = 0
             if press.modifiers.contains(.command) { mods |= UInt32(cmdKey) }
             if press.modifiers.contains(.option) { mods |= UInt32(optionKey) }
@@ -34,6 +38,18 @@ struct ShortcutRecorderField: View {
             combo = KeyCombo(keyCode: keyCode, modifiers: mods)
             isRecording = false
             return .handled
+        }
+        .onChange(of: isRecording) { _, recording in
+            GlobalHotKeyManager.shared.isRecordingShortcut = recording
+        }
+        .onChange(of: focused) { _, focused in
+            if !focused { isRecording = false }
+        }
+        .onDisappear {
+            if isRecording {
+                isRecording = false
+                GlobalHotKeyManager.shared.isRecordingShortcut = false
+            }
         }
     }
 }
